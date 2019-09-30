@@ -79,7 +79,7 @@ class OrganismState(object):
 		self.players = players
 
 	def choices_for(self, player):
-		
+		pass
 
 
 
