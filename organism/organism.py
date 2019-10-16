@@ -228,37 +228,39 @@ organism_actions = {
 
 
 class OrganismTurn(object):
-    def __init__(self, player, index):
+    def __init__(self, board, organisms, player, index):
+        self.board = board
+        self.organisms = organisms
         self.player = player
         self.index = index
         self.action_type = None
         self.number = -1
         self.choices = []
 
-    def choose_action_type(self, board, organisms, action_type):
+    def choose_action_type(self, action_type):
         self.action_type = action_type
-        organism_spaces = organisms[self.player][self.index]
+        organism_spaces = self.organisms[self.player][self.index]
         matching_elements = [
             space
             for space in organism_spaces
-            if board.spaces[space]['element']['type'] == action_type]
+            if self.board.spaces[space]['element']['type'] == action_type]
         self.number = len(matching_elements)
 
     def choose_action(self, action):
         self.choices.append(action)
 
-    def read_action(self, action_data):
+    def take_action(self, action_data):
         choice = action_data[0]
         make_action = organism_actions[choice]
         action = make_action(*action_data[1:])
         self.choose_action(action)
 
-    def read_turn(self, board, organisms, turn_data):
+    def take_turn(self, turn_data):
         action_type = turn_data[0]
         choices = turn_data[1:]
-        self.choose_action_type(board, organisms, action_type)
+        self.choose_action_type(action_type)
         for choice in choices:
-            self.read_action(choice)
+            self.take_action(choice)
 
     def apply_actions(self, board):
         for choice in self.choices:
@@ -301,11 +303,10 @@ def test_organism():
     print(board.spaces)
 
     organisms = board.find_organisms()
-
     print(organisms)
 
-    turn = OrganismTurn('Aorwa', list(organisms['Aorwa'].keys())[0])
-    turn.read_turn(board, organisms, [MOVE, [MOVE, ('purple', 3), ('blue', 2), ('blue', 1)]])
+    turn = OrganismTurn(board, organisms, 'Aorwa', list(organisms['Aorwa'].keys())[0])
+    turn.take_turn([MOVE, [MOVE, ('purple', 3), ('blue', 2), ('blue', 1)]])
     turn.apply_actions(board)
 
     print(board.spaces[('blue', 1)])
@@ -314,8 +315,8 @@ def test_organism():
     organisms = board.find_organisms()
     print(organisms)
 
-    turn = OrganismTurn('Maxoz', list(organisms['Maxoz'].keys())[0])
-    turn.read_turn(board, organisms, [EAT, [EAT, ('blue', 9), ('purple', 13)]])
+    turn = OrganismTurn(board, organisms, 'Maxoz', list(organisms['Maxoz'].keys())[0])
+    turn.take_turn([EAT, [EAT, ('blue', 9), ('purple', 13)]])
     turn.apply_actions(board)
 
     print(board.spaces[('blue', 9)])
@@ -324,8 +325,8 @@ def test_organism():
     organisms = board.find_organisms()
     print(organisms)
 
-    turn = OrganismTurn('Aorwa', list(organisms['Aorwa'].keys())[0])
-    turn.read_turn(board, organisms, [GROW, [GROW, {('blue', 2): 1}, GROW, ('blue', 1), ('blue', 0)]])
+    turn = OrganismTurn(board, organisms, 'Aorwa', list(organisms['Aorwa'].keys())[0])
+    turn.take_turn([GROW, [GROW, {('blue', 2): 1}, GROW, ('blue', 1), ('blue', 0)]])
     turn.apply_actions(board)
 
     print(board.spaces[('blue', 0)])
@@ -335,12 +336,22 @@ def test_organism():
     organisms = board.find_organisms()
     print(organisms)
 
-    turn = OrganismTurn('Maxoz', list(organisms['Maxoz'].keys())[0])
-    turn.read_turn(board, organisms, [EAT, [CIRCULATE, ('purple', 13), ('purple', 14)]])
+    turn = OrganismTurn(board, organisms, 'Maxoz', list(organisms['Maxoz'].keys())[0])
+    turn.take_turn([EAT, [CIRCULATE, ('purple', 13), ('purple', 14)]])
     turn.apply_actions(board)
 
     print(board.spaces[('purple', 13)])
     print(board.spaces[('purple', 14)])
+
+    organisms = board.find_organisms()
+    print(organisms)
+
+    turn = OrganismTurn(board, organisms, 'Aorwa', list(organisms['Aorwa'].keys())[0])
+    turn.take_turn([GROW, [CIRCULATE, ('purple', 2), ('blue', 2)], [CIRCULATE, ('purple', 1), ('blue', 1)]])
+    turn.apply_actions(board)
+
+    print(board.spaces[('blue', 1)])
+    print(board.spaces[('blue', 2)])
 
     organisms = board.find_organisms()
     print(organisms)
