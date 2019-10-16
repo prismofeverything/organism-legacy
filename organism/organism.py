@@ -5,6 +5,7 @@ PAD = -1
 EAT = 'EAT'
 MOVE = 'MOVE'
 GROW = 'GROW'
+CIRCULATE = 'CIRCULATE'
 
 def build_rows(rings):
     rows = []
@@ -219,6 +220,12 @@ class GrowAction(OrganismAction):
             'player': player,
             'type': self.element_type}
 
+organism_actions = {
+    EAT: EatAction,
+    MOVE: MoveAction,
+    GROW: GrowAction,
+    CIRCULATE: CirculateAction}
+
 
 class OrganismTurn(object):
     def __init__(self, player, index):
@@ -239,6 +246,19 @@ class OrganismTurn(object):
 
     def choose_action(self, action):
         self.choices.append(action)
+
+    def read_action(self, action_data):
+        choice = action_data[0]
+        make_action = organism_actions[choice]
+        action = make_action(*action_data[1:])
+        self.choose_action(action)
+
+    def read_turn(self, board, organisms, turn_data):
+        action_type = turn_data[0]
+        choices = turn_data[1:]
+        self.choose_action_type(board, organisms, action_type)
+        for choice in choices:
+            self.read_action(choice)
 
     def apply_actions(self, board):
         for choice in self.choices:
@@ -285,8 +305,7 @@ def test_organism():
     print(organisms)
 
     turn = OrganismTurn('Aorwa', list(organisms['Aorwa'].keys())[0])
-    turn.choose_action_type(board, organisms, MOVE)
-    turn.choose_action(MoveAction(('purple', 3), ('blue', 2), ('blue', 1)))
+    turn.read_turn(board, organisms, [MOVE, [MOVE, ('purple', 3), ('blue', 2), ('blue', 1)]])
     turn.apply_actions(board)
 
     print(board.spaces[('blue', 1)])
@@ -296,8 +315,7 @@ def test_organism():
     print(organisms)
 
     turn = OrganismTurn('Maxoz', list(organisms['Maxoz'].keys())[0])
-    turn.choose_action_type(board, organisms, EAT)
-    turn.choose_action(EatAction(('blue', 9), ('purple', 13)))
+    turn.read_turn(board, organisms, [EAT, [EAT, ('blue', 9), ('purple', 13)]])
     turn.apply_actions(board)
 
     print(board.spaces[('blue', 9)])
@@ -307,8 +325,7 @@ def test_organism():
     print(organisms)
 
     turn = OrganismTurn('Aorwa', list(organisms['Aorwa'].keys())[0])
-    turn.choose_action_type(board, organisms, GROW)
-    turn.choose_action(GrowAction({('blue', 2): 1}, ('blue', 1), GROW, ('blue', 0)))
+    turn.read_turn(board, organisms, [GROW, [GROW, {('blue', 2): 1}, ('blue', 1), GROW, ('blue', 0)]])
     turn.apply_actions(board)
 
     print(board.spaces[('blue', 0)])
@@ -319,8 +336,7 @@ def test_organism():
     print(organisms)
 
     turn = OrganismTurn('Maxoz', list(organisms['Maxoz'].keys())[0])
-    turn.choose_action_type(board, organisms, EAT)
-    turn.choose_action(CirculateAction(('purple', 13), ('purple', 14)))
+    turn.read_turn(board, organisms, [EAT, [CIRCULATE, ('purple', 13), ('purple', 14)]])
     turn.apply_actions(board)
 
     print(board.spaces[('purple', 13)])
