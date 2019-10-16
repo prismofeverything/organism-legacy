@@ -10,3 +10,5 @@ pom.xml.asc
 .hgignore
 .hg/
 *.pyc
+/.pytest_cache
+.python-version
