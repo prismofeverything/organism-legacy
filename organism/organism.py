@@ -196,10 +196,10 @@ class MoveAction(OrganismAction):
             'food': 0}
 
 class GrowAction(OrganismAction):
-    def __init__(self, consume_food, birth_space, element_type, push_food_space):
+    def __init__(self, consume_food, element_type, birth_space, push_food_space):
         self.consume_food = consume_food
-        self.birth_space = birth_space
         self.element_type = element_type
+        self.birth_space = birth_space
         self.push_food_space = push_food_space
 
     def apply_action(self, board):
@@ -325,7 +325,7 @@ def test_organism():
     print(organisms)
 
     turn = OrganismTurn('Aorwa', list(organisms['Aorwa'].keys())[0])
-    turn.read_turn(board, organisms, [GROW, [GROW, {('blue', 2): 1}, ('blue', 1), GROW, ('blue', 0)]])
+    turn.read_turn(board, organisms, [GROW, [GROW, {('blue', 2): 1}, GROW, ('blue', 1), ('blue', 0)]])
     turn.apply_actions(board)
 
     print(board.spaces[('blue', 0)])
