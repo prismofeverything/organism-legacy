@@ -2,6 +2,10 @@ import numpy as np
 
 PAD = -1
 
+EAT = 'EAT'
+MOVE = 'MOVE'
+GROW = 'GROW'
+
 def build_rows(rings):
     rows = []
     for ring in np.arange(rings):
@@ -84,6 +88,22 @@ class OrganismBoard(object):
         for space, state in self.spaces.items():
             state['food'] = levels[space[0]]
 
+    def push_food(self, from_space, to_space):
+        food = self.spaces[from_space]['food']
+        if self.spaces[to_space]['element'] is None:
+            self.spaces[to_space]['food'] += food
+        self.spaces[from_space]['food'] = 0
+
+    def space_player(self, space):
+        if self.spaces[space]['element']:
+            return self.spaces[space]['element']['player']
+
+    def adjacent_elements_of_type(self, space, player, element_type):
+        return [
+            adjacent_space
+            for adjacent_space in self.adjacencies[space]
+            if self.spaces[adjacent_space]['element'] and self.spaces[adjacent_space]['element']['player'] == player and self.spaces[adjacent_space]['element']['type'] == element_type]
+
     def find_organisms(self):
         organisms = {}
         index = 1
@@ -122,8 +142,107 @@ class OrganismBoard(object):
 
 
 class OrganismAction(object):
-    def __init__(self):
-        self.action = 5
+    def apply_action(self, board):
+        pass
+
+class CirculateAction(OrganismAction):
+    def __init__(self, from_space, to_space):
+        self.from_space = from_space
+        self.to_space = to_space
+        
+    def apply_action(self, board):
+        assert board.spaces[self.from_space]['food'] > 0
+        assert board.spaces[self.to_space]['food'] < 3
+        
+        board.spaces[self.from_space]['food'] -= 1
+        board.spaces[self.to_space]['food'] += 1
+
+class EatAction(OrganismAction):
+    def __init__(self, from_space, to_space):
+        self.from_space = from_space
+        self.to_space = to_space
+
+    def apply_action(self, board):
+        assert board.spaces[self.from_space]['element'] == None
+        assert board.spaces[self.from_space]['food'] > 0
+        assert board.spaces[self.to_space]['element']['type'] == EAT
+        assert board.spaces[self.to_space]['food'] < 3
+
+        board.spaces[self.from_space]['food'] -= 1
+        board.spaces[self.to_space]['food'] += 1
+
+class MoveAction(OrganismAction):
+    def __init__(self, from_space, to_space, push_food_space):
+        self.from_space = from_space
+        self.to_space = to_space
+        self.push_food_space = push_food_space
+
+    def apply_action(self, board):
+        player = board.space_player(self.from_space)
+        food = board.spaces[self.to_space]['food']
+        adjacent_move_elements = board.adjacent_elements_of_type(self.from_space, player, MOVE)
+        if board.spaces[self.from_space]['element']['type'] == MOVE:
+            adjacent_move_elements.append(self.from_space)
+
+        assert board.spaces[self.from_space]['food'] > 0
+        assert len(adjacent_move_elements) > 0
+        assert board.spaces[self.to_space]['element'] is None
+
+        board.push_food(self.to_space, self.push_food_space)
+        board.spaces[self.to_space] = board.spaces[self.from_space]
+        board.spaces[self.from_space] = {
+            'element': None,
+            'food': 0}
+
+class GrowAction(OrganismAction):
+    def __init__(self, consume_food, birth_space, element_type, push_food_space):
+        self.consume_food = consume_food
+        self.birth_space = birth_space
+        self.element_type = element_type
+        self.push_food_space = push_food_space
+
+    def apply_action(self, board):
+        player = board.space_player(list(self.consume_food.keys())[0])
+        adjacent_grow_elements = board.adjacent_elements_of_type(self.birth_space, player, GROW)
+
+        for space, consume in self.consume_food.items():
+            assert board.spaces[space]['food'] >= consume
+            assert board.spaces[space]['element']['type'] == GROW
+
+        assert board.spaces[self.birth_space]['element'] is None
+        assert len(adjacent_grow_elements) > 0
+
+        board.push_food(self.birth_space, self.push_food_space)
+        for space, consume in self.consume_food.items():
+            board.spaces[space]['food'] -= consume
+        board.spaces[self.birth_space]['element'] = {
+            'player': player,
+            'type': self.element_type}
+
+
+class OrganismTurn(object):
+    def __init__(self, player, index):
+        self.player = player
+        self.index = index
+        self.action_type = None
+        self.number = -1
+        self.choices = []
+
+    def choose_action_type(self, board, organisms, action_type):
+        self.action_type = action_type
+        organism_spaces = organisms[self.player][self.index]
+        matching_elements = [
+            space
+            for space in organism_spaces
+            if board.spaces[space]['element']['type'] == action_type]
+        self.number = len(matching_elements)
+
+    def choose_action(self, action):
+        self.choices.append(action)
+
+    def apply_actions(self, board):
+        for choice in self.choices:
+            choice.apply_action(board)
 
 
 def test_organism():
@@ -137,6 +256,8 @@ def test_organism():
     print(board.rows)
     print(board.adjacencies)
 
+    test_multiple_organisms = False
+
     board.initialize_food({
         'purple': 1,
         'blue': 1,
@@ -144,18 +265,43 @@ def test_organism():
         'orange': 3,
         'red': 5})
 
-    board.place_element(('purple', 0), 'Aorwa', 'EAT')
-    board.place_element(('purple', 1), 'Aorwa', 'MOVE')
-    board.place_element(('purple', 2), 'Aorwa', 'GROW')
+    board.place_element(('purple', 1), 'Aorwa', EAT)
+    board.place_element(('purple', 2), 'Aorwa', MOVE)
+    board.place_element(('purple', 3), 'Aorwa', GROW)
 
-    board.place_element(('purple', 10), 'Maxoz', 'EAT')
-    board.place_element(('purple', 11), 'Maxoz', 'MOVE')
-    board.place_element(('purple', 12), 'Maxoz', 'GROW')
+    board.place_element(('purple', 13), 'Maxoz', EAT)
+    board.place_element(('purple', 14), 'Maxoz', MOVE)
+    board.place_element(('purple', 15), 'Maxoz', GROW)
+
+    if test_multiple_organisms:
+        board.place_element(('orange', 1), 'Maxoz', EAT)
+        board.place_element(('orange', 2), 'Maxoz', MOVE)
+        board.place_element(('orange', 3), 'Maxoz', GROW)
 
     print(board.spaces)
 
     organisms = board.find_organisms()
 
+    print(organisms)
+
+    turn = OrganismTurn('Aorwa', list(organisms['Aorwa'].keys())[0])
+    turn.choose_action_type(board, organisms, MOVE)
+    turn.choose_action(MoveAction(('purple', 3), ('blue', 2), ('blue', 1)))
+    turn.apply_actions(board)
+
+    organisms = board.find_organisms()
+
+    print(board.spaces[('blue', 1)])
+    print(board.spaces[('blue', 2)])
+    print(organisms)
+
+    turn = OrganismTurn('Maxoz', list(organisms['Maxoz'].keys())[0])
+    turn.choose_action_type(board, organisms, EAT)
+    turn.choose_action(EatAction(('blue', 9), ('purple', 13)))
+    turn.apply_actions(board)
+
+    print(board.spaces[('blue', 9)])
+    print(board.spaces[('purple', 13)])
     print(organisms)
 
 
