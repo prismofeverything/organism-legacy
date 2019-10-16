@@ -81,13 +81,13 @@ class OrganismBoard(object):
         self.spaces[space]['food'] += amount
 
     def initialize_food(self, levels):
-        for space, state in self.spaces.iteritems():
+        for space, state in self.spaces.items():
             state['food'] = levels[space[0]]
 
     def find_organisms(self):
         organisms = {}
         index = 1
-        for space, state in self.spaces.iteritems():
+        for space, state in self.spaces.items():
             if state.get('element'):
                 player = state['element']['player']
                 if organisms.get(player):
@@ -110,10 +110,10 @@ class OrganismBoard(object):
                     index += 1
 
         invert = {}
-        for player, elements in organisms.iteritems():
+        for player, elements in organisms.items():
             if not invert.get(player):
                 invert[player] = {}
-            for space, index in elements.iteritems():
+            for space, index in elements.items():
                 if not invert[player].get(index):
                     invert[player][index] = []
                 invert[player][index].append(space)
