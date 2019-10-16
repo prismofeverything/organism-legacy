@@ -289,10 +289,10 @@ def test_organism():
     turn.choose_action(MoveAction(('purple', 3), ('blue', 2), ('blue', 1)))
     turn.apply_actions(board)
 
-    organisms = board.find_organisms()
-
     print(board.spaces[('blue', 1)])
     print(board.spaces[('blue', 2)])
+
+    organisms = board.find_organisms()
     print(organisms)
 
     turn = OrganismTurn('Maxoz', list(organisms['Maxoz'].keys())[0])
@@ -302,7 +302,33 @@ def test_organism():
 
     print(board.spaces[('blue', 9)])
     print(board.spaces[('purple', 13)])
+
+    organisms = board.find_organisms()
     print(organisms)
+
+    turn = OrganismTurn('Aorwa', list(organisms['Aorwa'].keys())[0])
+    turn.choose_action_type(board, organisms, GROW)
+    turn.choose_action(GrowAction({('blue', 2): 1}, ('blue', 1), GROW, ('blue', 0)))
+    turn.apply_actions(board)
+
+    print(board.spaces[('blue', 0)])
+    print(board.spaces[('blue', 1)])
+    print(board.spaces[('blue', 2)])
+
+    organisms = board.find_organisms()
+    print(organisms)
+
+    turn = OrganismTurn('Maxoz', list(organisms['Maxoz'].keys())[0])
+    turn.choose_action_type(board, organisms, EAT)
+    turn.choose_action(CirculateAction(('purple', 13), ('purple', 14)))
+    turn.apply_actions(board)
+
+    print(board.spaces[('purple', 13)])
+    print(board.spaces[('purple', 14)])
+
+    organisms = board.find_organisms()
+    print(organisms)
+
 
 
 if __name__ == '__main__':
