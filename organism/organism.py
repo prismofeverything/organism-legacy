@@ -105,6 +105,17 @@ class OrganismBoard(object):
             for adjacent_space in self.adjacencies[space]
             if self.spaces[adjacent_space]['element'] and self.spaces[adjacent_space]['element']['player'] == player and self.spaces[adjacent_space]['element']['type'] == element_type]
 
+    def elements(self, spaces):
+        return [
+            self.spaces[space]['element']
+            for space in spaces]
+
+    def elements_of(self, spaces, element_type):
+        return [
+            element
+            for element in self.elements(spaces)
+            if element['type'] == element_type]
+
     def find_organisms(self):
         organisms = {}
         index = 1
@@ -140,6 +151,53 @@ class OrganismBoard(object):
                 invert[player][index].append(space)
 
         return invert
+
+
+
+def organism_tree_order(board, state):
+    pass
+    
+
+def organism_tree_action(board, organisms, player, organism_index, action):
+    organism = organisms[player][organism_index]
+    elements = board.elements_of(organism)
+    action_number = len(elements)
+    state = {
+        'action': action,
+        'total': action_number,
+        'performed': 0,
+        'choices': []}
+
+    # for 
+    if state['performed'] < state['total']:
+        if action == EAT:
+            perform = organism_tree_eat(board, state)
+        elif action == MOVE:
+            perform = organism_tree_move(board, state)
+        elif action == GROW:
+            perform = organism_tree_grow(board, state)
+
+        state['choices'].append(perform)
+    else:
+        return state['paths']
+
+def organism_tree(board, organisms, player, organism_index):
+    return [
+        [action, organism_tree_action(board, organisms, player, organism_index, state=action)]
+        for action in [EAT, GROW, MOVE]]
+        
+
+
+
+class OrganismTree(object):
+    def __init__(self, board, organisms, player, organism):
+        self.board = board
+        self.organisms = organisms
+        self.player = player
+        self.organism = organism
+        self.children = []
+
+        
 
 
 class OrganismAction(object):
