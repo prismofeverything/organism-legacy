@@ -1,3 +1,4 @@
+import copy
 import numpy as np
 
 PAD = -1
@@ -157,7 +158,7 @@ class OrganismBoard(object):
 def make_turn_state(board, organisms, player, organism_index, action):
     organism = organisms[player][organism_index]
     elements = board.elements_of(organism, action)
-    action_number = len(elements)
+    total = len(elements)
 
     return {
         'player': player,
@@ -165,19 +166,27 @@ def make_turn_state(board, organisms, player, organism_index, action):
         'organism': organism,
         'action': action,
         'total': total,
+        'action_type': None,
         'sequence': [],
         'choices': []}
+
+def action_code(state):
+    return [state['action']] + state['choices']
+
+def complete_choice(state):
+    state['choices'].append(state['sequence'])
+    state['sequence'] = []
 
 def organism_tree_order(board, organisms, state):
     if len(state['choices']) < state['total']:
         return organism_tree_action(board, organisms, state)
     else:
-        return state
+        return action_code(state)
 
 def organism_tree_eat_from(board, organisms, state, adjacent):
     state['sequence'].append(adjacent)
-    state['choices'].append(state['sequence'])
-    state['sequence'] = []
+    complete_choice(state)
+
     return organism_tree_order(board, organisms, state)
 
 def organism_tree_eat_to(board, organisms, state, space, element):
@@ -193,20 +202,33 @@ def organism_tree_eat_to(board, organisms, state, space, element):
                 for adjacent_space in adjacent_food]
 
 def organism_tree_eat(board, organisms, state):
-    state['sequence'].append(EAT)
     eat_elements = board.elements_of(state['organism'], EAT)
     return [
         organism_tree_eat_to(board, organisms, copy.deepcopy(state), space, element)
         for space, element in eat_elements.items()]
 
+def organism_tree_move(board, organisms, state):
+    complete_choice(state)
+    return action_code(state)
+
+def organism_tree_grow(board, organisms, state):
+    complete_choice(state)
+    return action_code(state)
+
+def organism_tree_circulate(board, organisms, state):
+    complete_choice(state)
+    return action_code(state)
+
 def organism_tree_switch(board, organisms, state, action_type):
-    if action == EAT:
+    state['action_type'] = action_type
+    state['sequence'].append(action_type)
+    if action_type == EAT:
         return organism_tree_eat(board, organisms, state)
-    elif action == MOVE:
+    elif action_type == MOVE:
         return organism_tree_move(board, organisms, state)
-    elif action == GROW:
+    elif action_type == GROW:
         return organism_tree_grow(board, organisms, state)
-    elif action == CIRCULATE:
+    elif action_type == CIRCULATE:
         return organism_tree_circulate(board, organisms, state)
 
 def organism_tree_action(board, organisms, state):
@@ -225,13 +247,6 @@ def organism_tree(board, organisms, player, organism_index):
 
 
 
-class OrganismTree(object):
-    def __init__(self, board, organisms, player, organism):
-        self.board = board
-        self.organisms = organisms
-        self.player = player
-        self.organism = organism
-        self.children = []
 
         
 
@@ -361,6 +376,9 @@ class OrganismTurn(object):
             choice.apply_action(board)
 
 
+def player_keys(organisms, player):
+    return list(organisms[player].keys())
+
 def test_organism():
     board = OrganismBoard([
         'red',
@@ -399,7 +417,7 @@ def test_organism():
     organisms = board.find_organisms()
     print(organisms)
 
-    turn = OrganismTurn(board, organisms, 'Aorwa', list(organisms['Aorwa'].keys())[0])
+    turn = OrganismTurn(board, organisms, 'Aorwa', player_keys(organisms, 'Aorwa')[0])
     turn.take_turn([MOVE, [MOVE, ('purple', 3), ('blue', 2), ('blue', 1)]])
     turn.apply_actions(board)
 
@@ -409,7 +427,7 @@ def test_organism():
     organisms = board.find_organisms()
     print(organisms)
 
-    turn = OrganismTurn(board, organisms, 'Maxoz', list(organisms['Maxoz'].keys())[0])
+    turn = OrganismTurn(board, organisms, 'Maxoz', player_keys(organisms, 'Maxoz')[0])
     turn.take_turn([EAT, [EAT, ('blue', 9), ('purple', 13)]])
     turn.apply_actions(board)
 
@@ -419,7 +437,7 @@ def test_organism():
     organisms = board.find_organisms()
     print(organisms)
 
-    turn = OrganismTurn(board, organisms, 'Aorwa', list(organisms['Aorwa'].keys())[0])
+    turn = OrganismTurn(board, organisms, 'Aorwa', player_keys(organisms, 'Aorwa')[0])
     turn.take_turn([GROW, [GROW, {('blue', 2): 1}, GROW, ('blue', 1), ('blue', 0)]])
     turn.apply_actions(board)
 
@@ -430,7 +448,7 @@ def test_organism():
     organisms = board.find_organisms()
     print(organisms)
 
-    turn = OrganismTurn(board, organisms, 'Maxoz', list(organisms['Maxoz'].keys())[0])
+    turn = OrganismTurn(board, organisms, 'Maxoz', player_keys(organisms, 'Maxoz')[0])
     turn.take_turn([EAT, [CIRCULATE, ('purple', 13), ('purple', 14)]])
     turn.apply_actions(board)
 
@@ -440,7 +458,7 @@ def test_organism():
     organisms = board.find_organisms()
     print(organisms)
 
-    turn = OrganismTurn(board, organisms, 'Aorwa', list(organisms['Aorwa'].keys())[0])
+    turn = OrganismTurn(board, organisms, 'Aorwa', player_keys(organisms, 'Aorwa')[0])
     turn.take_turn([GROW, [CIRCULATE, ('purple', 2), ('blue', 2)], [CIRCULATE, ('purple', 1), ('blue', 1)]])
     turn.apply_actions(board)
 
@@ -450,6 +468,8 @@ def test_organism():
     organisms = board.find_organisms()
     print(organisms)
 
+    tree = organism_tree(board, organisms, 'Aorwa', player_keys(organisms, 'Aorwa')[0])
+    print(tree)
 
 
 if __name__ == '__main__':
