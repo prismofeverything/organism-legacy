@@ -1,5 +1,6 @@
 import copy
 import numpy as np
+import collections
 
 PAD = -1
 
@@ -7,6 +8,12 @@ EAT = 'EAT'
 MOVE = 'MOVE'
 GROW = 'GROW'
 CIRCULATE = 'CIRCULATE'
+
+def flatten(l):
+    if isinstance(l, collections.Sequence) and not isinstance(l, (str, bytes, tuple)):
+        return [a for i in l for a in flatten(i)]
+    else:
+        return [l]
 
 def build_rows(rings):
     rows = []
@@ -151,6 +158,22 @@ class OrganismBoard(object):
 
 
 
+class expanding_tuple(object):
+    def __init__(self, tup=None):
+        self.tup = tup or ()
+
+    def append(self, element):
+        expanding = list(self.tup)
+        expanding.append(element)
+        self.tup = tuple(expanding)
+
+    def tuple_for(self):
+        return self.tup
+
+    def reset(self):
+        self.tup = ()
+
+
 class OrganismTree(object):
     def __init__(self, board, organisms, player, organism_index):
         self.board = board
@@ -159,7 +182,7 @@ class OrganismTree(object):
         self.organism_index = organism_index
         self.action = None
         self.action_type = None
-        self.sequence = []
+        self.sequence = expanding_tuple()
         self.choices = []
         self.organism = self.organisms[self.player][self.organism_index]
 
@@ -167,21 +190,23 @@ class OrganismTree(object):
         return copy.deepcopy(self)
 
     def action_code(self):
-        return [self.action] + self.choices
+        return tuple([self.action] + self.choices)
         
     def complete_choice(self):
-        self.choices.append(self.sequence)
-        self.sequence = []
+        self.choices.append(self.sequence.tuple_for())
+        self.sequence.reset()
 
     def walk_order(self):
+        self.complete_choice()
         if len(self.choices) < self.total:
             return self.organism_tree_action()
         else:
             return self.action_code()
 
-    def walk_eat_from(self, adjacent):
-        self.sequence.append(adjacent)
-        self.complete_choice()
+    def walk_eat_from(self, space, food_space):
+        self.board.spaces[space]['food'] += 1
+        self.board.spaces[food_space]['food'] -= 1
+        self.sequence.append(food_space)
 
         return self.walk_order()
 
@@ -192,10 +217,11 @@ class OrganismTree(object):
                 adjacent_space
                 for adjacent_space in board.adjacencies[space]
                 if board.spaces[adjacent_space]['food'] > 0 and board.spaces[adjacent_space]['element'] is None]
+
             if len(adjacent_food) > 0:
                 self.sequence.append(space)
                 return [
-                    self.clone().walk_eat_from(adjacent_space)
+                    self.clone().walk_eat_from(space, adjacent_space)
                     for adjacent_space in adjacent_food]
 
     def walk_eat(self):
@@ -204,9 +230,46 @@ class OrganismTree(object):
             self.clone().walk_eat_to(space)
             for space in eat_elements.keys()]
 
+    def walk_move_food(self, space, open_space):
+        food = self.board.spaces[space]['food']
+        self.board.spaces[open_space]['food'] += food
+        self.board.spaces[space] = 0
+        self.sequence.append(open_space)
+
+        return self.walk_order()
+
+    def walk_move_to(self, move_from, space):
+        self.board.spaces[space]['element'] = self.board.spaces[move_from]['element']
+        self.board.spaces[move_from]['element'] = None
+        self.sequence.append(space)
+
+        if self.board.spaces[space]['food'] > 0:
+            open_spaces = [
+                open_space
+                for open_space in self.board.adjacencies[space]
+                if open_space != space and not self.board.spaces[open_space]['element']]
+            if len(open_spaces) > 0:
+                return [
+                    self.clone().walk_move_food(space, open_space)
+                    for open_space in open_spaces]
+            else:
+                return self.walk_order()
+        else:
+            return self.walk_order()
+
     def walk_move_from(self, space):
         board = self.board
-        self.sequence.append(space)
+        if self.board.space_player(space) == self.player and self.board.spaces[space]['food'] > 0:
+            empty_spaces = [
+                empty_space
+                for empty_space in self.board.adjacencies[space]
+                if not self.board.spaces[empty_space]['element']]
+
+            if len(empty_spaces) > 0:
+                self.sequence.append(space)
+                return [
+                    self.clone().walk_move_to(space, empty_space)
+                    for empty_space in empty_spaces]
 
     def walk_move(self):
         move_elements = self.board.elements_of(self.organism, MOVE)
@@ -214,14 +277,10 @@ class OrganismTree(object):
             self.board.adjacencies[move_space]
             for move_space in move_elements.keys()]
         flat_spaces = frozenset([item for sublist in adjacent_spaces for item in sublist] + list(move_elements.keys()))
-        elements_with_food = [
-            space
-            for space in flat_spaces
-            if self.board.space_player(space) == self.player and self.board.spaces[space]['food'] > 0]
 
         return [
             self.clone().walk_move_from(space)
-            for space in elements_with_food]
+            for space in flat_spaces]
 
     def walk_grow(self):
         self.complete_choice()
@@ -255,86 +314,15 @@ class OrganismTree(object):
             for action_type in [self.action, CIRCULATE]]
 
     def walk(self):
-        return [
+        path = [
             self.clone().walk_action(action)
             for action in [EAT, GROW, MOVE]]
 
-
-# def organism_tree_order(state):
-#     if len(state.choices) < state.total:
-#         return organism_tree_action(state)
-#     else:
-#         return state.action_code()
-
-# def organism_tree_eat_from(state, adjacent):
-#     state.sequence.append(adjacent)
-#     state.complete_choice()
-
-#     return organism_tree_order(state)
-
-# def organism_tree_eat_to(state, space):
-#     board = state.board
-#     if board.spaces[space]['food'] < 3:
-#         adjacent_food = [
-#             adjacent_space
-#             for adjacent_space in board.adjacencies[space]
-#             if board.spaces[adjacent_space]['food'] > 0 and board.spaces[adjacent_space]['element'] is None]
-#         if len(adjacent_food) > 0:
-#             state.sequence.append(space)
-#             return [
-#                 organism_tree_eat_from(copy.deepcopy(state), adjacent_space)
-#                 for adjacent_space in adjacent_food]
-
-# def organism_tree_eat(state):
-#     eat_elements = state.board.elements_of(state.organism, EAT)
-#     return [
-#         organism_tree_eat_to(copy.deepcopy(state), space)
-#         for space in eat_elements.keys()]
-
-# def organism_tree_move(state):
-#     move_elements = state.board.elements_of(state.organism, MOVE)
-
-
-
-#     state.complete_choice()
-#     return state.action_code()
-
-# def organism_tree_grow(state):
-#     state.complete_choice()
-#     return state.action_code()
-
-# def organism_tree_circulate(state):
-#     state.complete_choice()
-#     return state.action_code()
-
-# def organism_tree_switch(state, action_type):
-#     state.action_type = action_type
-#     state.sequence.append(action_type)
-
-#     if action_type == EAT:
-#         return organism_tree_eat(state)
-#     elif action_type == MOVE:
-#         return organism_tree_move(state)
-#     elif action_type == GROW:
-#         return organism_tree_grow(state)
-#     elif action_type == CIRCULATE:
-#         return organism_tree_circulate(state)
-
-# def organism_tree_action(state):
-#     return [
-#         organism_tree_switch(copy.deepcopy(state), action_type)
-#         for action_type in [state.action, CIRCULATE]]
-
-# def organism_tree(board, organisms, player, organism_index):
-#     return [
-#         organism_tree_action(
-#             TurnState(board, organisms, player, organism_index, action))
-#         for action in [EAT, GROW, MOVE]]
-        
-
-
-
-
+        return flatten(path)
+        return [
+            step
+            for step in flatten(path)
+            if step]
         
 
 
@@ -392,7 +380,7 @@ class MoveAction(OrganismAction):
             'food': 0}
 
 class GrowAction(OrganismAction):
-    def __init__(self, consume_food, element_type, birth_space, push_food_space):
+    def __init__(self, element_type, consume_food, birth_space, push_food_space):
         self.consume_food = consume_food
         self.element_type = element_type
         self.birth_space = birth_space
@@ -525,7 +513,7 @@ def test_organism():
     print(organisms)
 
     turn = OrganismTurn(board, organisms, 'Aorwa', player_keys(organisms, 'Aorwa')[0])
-    turn.take_turn([GROW, [GROW, {('blue', 2): 1}, GROW, ('blue', 1), ('blue', 0)]])
+    turn.take_turn([GROW, [GROW, GROW, {('blue', 2): 1}, ('blue', 1), ('blue', 0)]])
     turn.apply_actions(board)
 
     print(board.spaces[('blue', 0)])
