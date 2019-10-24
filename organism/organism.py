@@ -291,6 +291,8 @@ class OrganismTree(object):
             for space in flat_spaces]
 
     def walk_grow(self):
+        grow_elements = self.board.elements_of(self.organism, GROW)
+
         self.complete_choice()
         return self.action_code()
 
