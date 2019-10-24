@@ -63,10 +63,6 @@ def build_rings(rings):
     return adjacencies
             
 
-class OrganismState(object):
-    def __init__(self, ):
-        pass
-
 class OrganismBoard(object):
     def __init__(self, rings):
         self.rings = rings
@@ -155,94 +151,185 @@ class OrganismBoard(object):
 
 
 
-def make_turn_state(board, organisms, player, organism_index, action):
-    organism = organisms[player][organism_index]
-    elements = board.elements_of(organism, action)
-    total = len(elements)
+class OrganismTree(object):
+    def __init__(self, board, organisms, player, organism_index):
+        self.board = board
+        self.organisms = organisms
+        self.player = player
+        self.organism_index = organism_index
+        self.action = None
+        self.action_type = None
+        self.sequence = []
+        self.choices = []
+        self.organism = self.organisms[self.player][self.organism_index]
 
-    return {
-        'player': player,
-        'organism_index': organism_index,
-        'organism': organism,
-        'action': action,
-        'total': total,
-        'action_type': None,
-        'sequence': [],
-        'choices': []}
+    def clone(self):
+        return copy.deepcopy(self)
 
-def action_code(state):
-    return [state['action']] + state['choices']
+    def action_code(self):
+        return [self.action] + self.choices
+        
+    def complete_choice(self):
+        self.choices.append(self.sequence)
+        self.sequence = []
 
-def complete_choice(state):
-    state['choices'].append(state['sequence'])
-    state['sequence'] = []
+    def walk_order(self):
+        if len(self.choices) < self.total:
+            return self.organism_tree_action()
+        else:
+            return self.action_code()
 
-def organism_tree_order(board, organisms, state):
-    if len(state['choices']) < state['total']:
-        return organism_tree_action(board, organisms, state)
-    else:
-        return action_code(state)
+    def walk_eat_from(self, adjacent):
+        self.sequence.append(adjacent)
+        self.complete_choice()
 
-def organism_tree_eat_from(board, organisms, state, adjacent):
-    state['sequence'].append(adjacent)
-    complete_choice(state)
+        return self.walk_order()
 
-    return organism_tree_order(board, organisms, state)
+    def walk_eat_to(self, space):
+        board = self.board
+        if board.spaces[space]['food'] < 3:
+            adjacent_food = [
+                adjacent_space
+                for adjacent_space in board.adjacencies[space]
+                if board.spaces[adjacent_space]['food'] > 0 and board.spaces[adjacent_space]['element'] is None]
+            if len(adjacent_food) > 0:
+                self.sequence.append(space)
+                return [
+                    self.clone().walk_eat_from(adjacent_space)
+                    for adjacent_space in adjacent_food]
 
-def organism_tree_eat_to(board, organisms, state, space, element):
-    if board.spaces[space]['food'] < 3:
-        adjacent_food = [
-            adjacent_space
-            for adjacent_space in board.adjacencies[space]
-            if board.spaces[space]['food'] > 0 and board.spaces[space]['element'] is None]
-        if len(adjacent_food) > 0:
-            state['sequence'].append(space)
-            return [
-                organism_tree_eat_from(board, organisms, copy.deepcopy(state), adjacent_space)
-                for adjacent_space in adjacent_food]
+    def walk_eat(self):
+        eat_elements = self.board.elements_of(self.organism, EAT)
+        return [
+            self.clone().walk_eat_to(space)
+            for space in eat_elements.keys()]
 
-def organism_tree_eat(board, organisms, state):
-    eat_elements = board.elements_of(state['organism'], EAT)
-    return [
-        organism_tree_eat_to(board, organisms, copy.deepcopy(state), space, element)
-        for space, element in eat_elements.items()]
+    def walk_move_from(self, space):
+        board = self.board
+        self.sequence.append(space)
 
-def organism_tree_move(board, organisms, state):
-    complete_choice(state)
-    return action_code(state)
+    def walk_move(self):
+        move_elements = self.board.elements_of(self.organism, MOVE)
+        adjacent_spaces = [
+            self.board.adjacencies[move_space]
+            for move_space in move_elements.keys()]
+        flat_spaces = frozenset([item for sublist in adjacent_spaces for item in sublist] + list(move_elements.keys()))
+        elements_with_food = [
+            space
+            for space in flat_spaces
+            if self.board.space_player(space) == self.player and self.board.spaces[space]['food'] > 0]
 
-def organism_tree_grow(board, organisms, state):
-    complete_choice(state)
-    return action_code(state)
+        return [
+            self.clone().walk_move_from(space)
+            for space in elements_with_food]
 
-def organism_tree_circulate(board, organisms, state):
-    complete_choice(state)
-    return action_code(state)
+    def walk_grow(self):
+        self.complete_choice()
+        return self.action_code()
 
-def organism_tree_switch(board, organisms, state, action_type):
-    state['action_type'] = action_type
-    state['sequence'].append(action_type)
-    if action_type == EAT:
-        return organism_tree_eat(board, organisms, state)
-    elif action_type == MOVE:
-        return organism_tree_move(board, organisms, state)
-    elif action_type == GROW:
-        return organism_tree_grow(board, organisms, state)
-    elif action_type == CIRCULATE:
-        return organism_tree_circulate(board, organisms, state)
+    def walk_circulate(self):
+        self.complete_choice()
+        return self.action_code()
 
-def organism_tree_action(board, organisms, state):
-    return [
-        organism_tree_switch(board, organisms, copy.deepcopy(state), action_type)
-        for action_type in [state['action'], CIRCULATE]]
+    def walk_switch(self, action_type):
+        self.action_type = action_type
+        self.sequence.append(action_type)
 
-def organism_tree(board, organisms, player, organism_index):
-    return [
-        organism_tree_action(
-            board,
-            organisms,
-            make_turn_state(board, organisms, player, organism_index, action))
-        for action in [EAT, GROW, MOVE]]
+        if action_type == EAT:
+            return self.walk_eat()
+        elif action_type == MOVE:
+            return self.walk_move()
+        elif action_type == GROW:
+            return self.walk_grow()
+        elif action_type == CIRCULATE:
+            return self.walk_circulate()
+
+    def walk_action(self, action):
+        self.action = action
+
+        elements = self.board.elements_of(self.organism, action)
+        self.total = len(elements)
+
+        return [
+            self.clone().walk_switch(action_type)
+            for action_type in [self.action, CIRCULATE]]
+
+    def walk(self):
+        return [
+            self.clone().walk_action(action)
+            for action in [EAT, GROW, MOVE]]
+
+
+# def organism_tree_order(state):
+#     if len(state.choices) < state.total:
+#         return organism_tree_action(state)
+#     else:
+#         return state.action_code()
+
+# def organism_tree_eat_from(state, adjacent):
+#     state.sequence.append(adjacent)
+#     state.complete_choice()
+
+#     return organism_tree_order(state)
+
+# def organism_tree_eat_to(state, space):
+#     board = state.board
+#     if board.spaces[space]['food'] < 3:
+#         adjacent_food = [
+#             adjacent_space
+#             for adjacent_space in board.adjacencies[space]
+#             if board.spaces[adjacent_space]['food'] > 0 and board.spaces[adjacent_space]['element'] is None]
+#         if len(adjacent_food) > 0:
+#             state.sequence.append(space)
+#             return [
+#                 organism_tree_eat_from(copy.deepcopy(state), adjacent_space)
+#                 for adjacent_space in adjacent_food]
+
+# def organism_tree_eat(state):
+#     eat_elements = state.board.elements_of(state.organism, EAT)
+#     return [
+#         organism_tree_eat_to(copy.deepcopy(state), space)
+#         for space in eat_elements.keys()]
+
+# def organism_tree_move(state):
+#     move_elements = state.board.elements_of(state.organism, MOVE)
+
+
+
+#     state.complete_choice()
+#     return state.action_code()
+
+# def organism_tree_grow(state):
+#     state.complete_choice()
+#     return state.action_code()
+
+# def organism_tree_circulate(state):
+#     state.complete_choice()
+#     return state.action_code()
+
+# def organism_tree_switch(state, action_type):
+#     state.action_type = action_type
+#     state.sequence.append(action_type)
+
+#     if action_type == EAT:
+#         return organism_tree_eat(state)
+#     elif action_type == MOVE:
+#         return organism_tree_move(state)
+#     elif action_type == GROW:
+#         return organism_tree_grow(state)
+#     elif action_type == CIRCULATE:
+#         return organism_tree_circulate(state)
+
+# def organism_tree_action(state):
+#     return [
+#         organism_tree_switch(copy.deepcopy(state), action_type)
+#         for action_type in [state.action, CIRCULATE]]
+
+# def organism_tree(board, organisms, player, organism_index):
+#     return [
+#         organism_tree_action(
+#             TurnState(board, organisms, player, organism_index, action))
+#         for action in [EAT, GROW, MOVE]]
         
 
 
@@ -468,8 +555,11 @@ def test_organism():
     organisms = board.find_organisms()
     print(organisms)
 
-    tree = organism_tree(board, organisms, 'Aorwa', player_keys(organisms, 'Aorwa')[0])
-    print(tree)
+    # tree = organism_tree(board, organisms, 'Aorwa', player_keys(organisms, 'Aorwa')[0])
+    tree = OrganismTree(board, organisms, 'Aorwa', player_keys(organisms, 'Aorwa')[0])
+    print(tree.walk())
+
+
 
 
 if __name__ == '__main__':
