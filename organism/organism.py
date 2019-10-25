@@ -113,6 +113,14 @@ class OrganismBoard(object):
         if self.spaces[space]['element']:
             return self.spaces[space]['element']['player']
 
+    def other_players_adjacent(self, space, player):
+        other_players = []
+        for adjacent_space in self.adjacencies[space]:
+            adjacent_player = self.space_player(adjacent_space)
+            if adjacent_player and adjacent_player != player:
+                other_players.append(adjacent_player)
+        return other_players
+
     def adjacent_elements_of_type(self, space, player, element_type):
         return [
             adjacent_space
@@ -184,6 +192,14 @@ class expanding_tuple(object):
         self.tup = ()
 
 
+def grow_consume_options(availability, total):
+    options = []
+    for space, food in availability.items():
+        for i in range(food):
+            options.append(space)
+
+    
+
 class OrganismTree(object):
     def __init__(self, board, organisms, player, organism_index):
         self.board = board
@@ -194,6 +210,7 @@ class OrganismTree(object):
         self.action_type = None
         self.sequence = expanding_tuple()
         self.choices = []
+        self.food_limit = 0
         self.organism = self.organisms[self.player][self.organism_index]
 
     def clone(self):
@@ -204,6 +221,7 @@ class OrganismTree(object):
         
     def complete_choice(self):
         self.choices.append(self.sequence.tuple_for())
+        self.food_limit = 0
         self.sequence.reset()
 
     def walk_order(self):
@@ -239,30 +257,28 @@ class OrganismTree(object):
             self.clone().walk_eat_to(space)
             for space in eat_elements.keys()]
 
-    def walk_move_food(self, space, open_space):
-        food = self.board.spaces[space]['food']
-        self.board.spaces[open_space]['food'] += food
-        self.board.spaces[space] = 0
+    def walk_move_food(self, from_space, to_space, open_space):
+        self.board.spaces[open_space]['food'] += self.board.spaces[to_space]['food']
+        self.board.spaces[to_space]['food'] = 0
+        self.board.move_element(from_space, to_space)
         self.sequence.append(open_space)
 
         return self.walk_order()
 
-    def walk_move_to(self, move_from, space):
-        self.board.move_element(move_from, space)
-        self.sequence.append(space)
+    def walk_move_to(self, from_space, to_space):
+        self.sequence.append(to_space)
 
-        if self.board.spaces[space]['food'] > 0:
-            open_spaces = [
-                open_space
-                for open_space in self.board.adjacencies[space]
-                if open_space != space and not self.board.spaces[open_space]['element']]
-            if len(open_spaces) > 0:
-                return [
-                    self.clone().walk_move_food(space, open_space)
-                    for open_space in open_spaces]
-            else:
-                return self.walk_order()
+        open_spaces = [
+            open_space
+            for open_space in self.board.adjacencies[to_space]
+            if open_space != from_space and not self.board.spaces[open_space]['element']]
+
+        if self.board.spaces[to_space]['food'] > 0 and len(open_spaces) > 0:
+            return [
+                self.clone().walk_move_food(from_space, to_space, open_space)
+                for open_space in open_spaces]
         else:
+            self.board.move_element(from_space, to_space)
             return self.walk_order()
 
     def walk_move_from(self, space):
@@ -290,11 +306,74 @@ class OrganismTree(object):
             self.clone().walk_move_from(space)
             for space in flat_spaces]
 
-    def walk_grow(self):
-        grow_elements = self.board.elements_of(self.organism, GROW)
+    def walk_grow_food(self, into_space, open_space):
+        self.board.spaces[open_space]['food'] += self.board.spaces[into_space]['food']
+        self.board.spaces[into_space]['food'] = 0
+        self.board.place_element(into_space, self.player, self.sequence[1])
+        self.sequence.append(open_space)
 
+        return self.walk_order()
+
+    def walk_grow_into(self, into_space):
+        self.sequence.append(into_space)
+
+        open_spaces = [
+            open_space
+            for open_space in self.board.adjacencies[into_space]
+            if not self.board.spaces[open_space]['element']]
+
+        if self.board.spaces[into_space]['food'] > 0 and len(open_spaces) > 0:
+            return [
+                self.clone().walk_grow_food(into_space, open_space)
+                for open_space in open_spaces]
+        else:
+            self.board.spaces[into_space]['food'] = 0
+            self.board.place_element(into_space, self.player, self.sequence[1])
+            return self.walk_order()
+
+    def walk_grow_consume(self, consume):
+        for consume_space, consume_food in consume.items():
+            self.board.spaces[consume_space]['food'] -= consume_food
+        self.sequence.append(consume)
+
+        grow_elements = self.board.elements_of(self.organism, GROW)
+        adjacent_spaces = [
+            self.board.adjacencies[grow_space]
+            for grow_space in grow_elements.keys()]
+        flat_spaces = frozenset([item for sublist in adjacent_spaces for item in sublist])
+
+        open_spaces = [
+            adjacent
+            for adjacent in flat_spaces
+            if not self.board.spaces[adjacent]['element'] and not self.board.other_players_adjacent(adjacent, self.player)]
+        
+        if open_spaces:
+            return [
+                self.clone().walk_grow_into(open_space)
+                for open_space in open_spaces]
+
+    def walk_grow_element(self, element_type):
+        elements = self.board.elements_of(self.organism, element_type)
+        if self.food_limit >= len(elements):
+            self.sequence.append(element_type)
+            return [
+                self.clone().walk_grow_consume(consume)
+                for consume in grow_consume_options(self.food_availability, len(elements))]
+
+    def walk_grow(self):
         self.complete_choice()
         return self.action_code()
+
+        grow_elements = self.board.elements_of(self.organism, GROW)
+        self.food_availability = {
+            grow: self.board.spaces[grow]['food']
+            for grow in grow_elements.keys()
+            if self.board.spaces[grow]['food'] > 0}
+        self.food_limit = np.sum(self.food_availability.values())
+
+        return [
+            self.clone().walk_grow_element(element_type)
+            for element_type in [EAT, MOVE, GROW]]
 
     def walk_circulate_to(self, from_space, to_space):
         self.board.move_food(from_space, to_space)
