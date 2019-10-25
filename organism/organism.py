@@ -1,6 +1,11 @@
 import copy
+from math import factorial
 import numpy as np
+import pprint
 import collections
+from itertools import combinations
+
+pp = pprint.PrettyPrinter(indent=4)
 
 PAD = -1
 
@@ -9,11 +14,17 @@ MOVE = 'MOVE'
 GROW = 'GROW'
 CIRCULATE = 'CIRCULATE'
 
+def items(d):
+    return list(d.items())
+
 def flatten(l):
     if isinstance(l, collections.Sequence) and not isinstance(l, (str, bytes, tuple)):
         return [a for i in l for a in flatten(i)]
     else:
         return [l]
+
+def choose(n, k):
+    return factorial(n) / factorial(k) / factorial(n - k)
 
 def build_rows(rings):
     rows = []
@@ -90,7 +101,7 @@ class OrganismBoard(object):
         self.spaces[space]['food'] += amount
 
     def initialize_food(self, levels):
-        for space, state in self.spaces.items():
+        for space, state in items(self.spaces):
             state['food'] = levels[space[0]]
 
     def push_food(self, from_space, to_space):
@@ -141,7 +152,7 @@ class OrganismBoard(object):
     def find_organisms(self):
         organisms = {}
         index = 1
-        for space, state in self.spaces.items():
+        for space, state in items(self.spaces):
             if state.get('element'):
                 player = state['element']['player']
                 if organisms.get(player):
@@ -164,10 +175,10 @@ class OrganismBoard(object):
                     index += 1
 
         invert = {}
-        for player, elements in organisms.items():
+        for player, elements in items(organisms):
             if not invert.get(player):
                 invert[player] = {}
-            for space, index in elements.items():
+            for space, index in items(elements):
                 if not invert[player].get(index):
                     invert[player][index] = []
                 invert[player][index].append(space)
@@ -192,13 +203,26 @@ class expanding_tuple(object):
         self.tup = ()
 
 
+def histogram(events):
+    result = {}
+    for event in events:
+        if not result.get(event):
+            result[event] = 0
+        result[event] += 1
+    return tuple(sorted(result.items()))
+
 def grow_consume_options(availability, total):
     options = []
-    for space, food in availability.items():
+    for space, food in items(availability):
         for i in range(food):
             options.append(space)
-
     
+    print('options: {}'.format(options))
+
+    return frozenset([
+        histogram(consume)
+        for consume in combinations(options, total)])
+
 
 class OrganismTree(object):
     def __init__(self, board, organisms, player, organism_index):
@@ -261,6 +285,8 @@ class OrganismTree(object):
         self.board.spaces[open_space]['food'] += self.board.spaces[to_space]['food']
         self.board.spaces[to_space]['food'] = 0
         self.board.move_element(from_space, to_space)
+        self.organism.remove(from_space)
+        self.organism.append(to_space)
         self.sequence.append(open_space)
 
         return self.walk_order()
@@ -306,33 +332,38 @@ class OrganismTree(object):
             self.clone().walk_move_from(space)
             for space in flat_spaces]
 
-    def walk_grow_food(self, into_space, open_space):
-        self.board.spaces[open_space]['food'] += self.board.spaces[into_space]['food']
-        self.board.spaces[into_space]['food'] = 0
-        self.board.place_element(into_space, self.player, self.sequence[1])
-        self.sequence.append(open_space)
+    # def walk_grow_food(self, into_space, open_space):
+    #     self.board.spaces[open_space]['food'] += self.board.spaces[into_space]['food']
+    #     self.board.spaces[into_space]['food'] = 0
+    #     self.board.place_element(into_space, self.player, self.sequence.tup[1])
+    #     self.sequence.append(open_space)
+
+    #     return self.walk_order()
+
+    def walk_grow_into(self, into_space):
+        self.board.place_element(into_space, self.player, self.sequence.tup[1])
+        self.organism.append(into_space)
+        self.sequence.append(into_space)
 
         return self.walk_order()
 
-    def walk_grow_into(self, into_space):
-        self.sequence.append(into_space)
+        # self.sequence.append(into_space)
+        # open_spaces = [
+        #     open_space
+        #     for open_space in self.board.adjacencies[into_space]
+        #     if not self.board.spaces[open_space]['element']]
 
-        open_spaces = [
-            open_space
-            for open_space in self.board.adjacencies[into_space]
-            if not self.board.spaces[open_space]['element']]
-
-        if self.board.spaces[into_space]['food'] > 0 and len(open_spaces) > 0:
-            return [
-                self.clone().walk_grow_food(into_space, open_space)
-                for open_space in open_spaces]
-        else:
-            self.board.spaces[into_space]['food'] = 0
-            self.board.place_element(into_space, self.player, self.sequence[1])
-            return self.walk_order()
+        # if self.board.spaces[into_space]['food'] > 0 and len(open_spaces) > 0:
+        #     return [
+        #         self.clone().walk_grow_food(into_space, open_space)
+        #         for open_space in open_spaces]
+        # else:
+        #     self.board.spaces[into_space]['food'] = 0
+        #     self.board.place_element(into_space, self.player, self.sequence.tup[1])
+        #     return self.walk_order()
 
     def walk_grow_consume(self, consume):
-        for consume_space, consume_food in consume.items():
+        for consume_space, consume_food in consume:
             self.board.spaces[consume_space]['food'] -= consume_food
         self.sequence.append(consume)
 
@@ -361,15 +392,12 @@ class OrganismTree(object):
                 for consume in grow_consume_options(self.food_availability, len(elements))]
 
     def walk_grow(self):
-        self.complete_choice()
-        return self.action_code()
-
         grow_elements = self.board.elements_of(self.organism, GROW)
         self.food_availability = {
             grow: self.board.spaces[grow]['food']
             for grow in grow_elements.keys()
             if self.board.spaces[grow]['food'] > 0}
-        self.food_limit = np.sum(self.food_availability.values())
+        self.food_limit = sum(self.food_availability.values())
 
         return [
             self.clone().walk_grow_element(element_type)
@@ -432,11 +460,10 @@ class OrganismTree(object):
             self.clone().walk_action(action)
             for action in [EAT, GROW, MOVE]]
 
-        return flatten(path)
-        return [
+        return sorted(frozenset([
             step
             for step in flatten(path)
-            if step]
+            if step]))
         
 
 
@@ -504,7 +531,7 @@ class GrowAction(OrganismAction):
         player = board.space_player(list(self.consume_food.keys())[0])
         adjacent_grow_elements = board.adjacent_elements_of_type(self.birth_space, player, GROW)
 
-        for space, consume in self.consume_food.items():
+        for space, consume in items(self.consume_food):
             assert board.spaces[space]['food'] >= consume
             assert board.spaces[space]['element']['type'] == GROW
 
@@ -512,7 +539,7 @@ class GrowAction(OrganismAction):
         assert len(adjacent_grow_elements) > 0
 
         board.push_food(self.birth_space, self.push_food_space)
-        for space, consume in self.consume_food.items():
+        for space, consume in items(self.consume_food):
             board.spaces[space]['food'] -= consume
         board.spaces[self.birth_space]['element'] = {
             'player': player,
@@ -616,6 +643,11 @@ def test_organism():
     organisms = board.find_organisms()
     print(organisms)
 
+    tree = OrganismTree(board, organisms, 'Aorwa', player_keys(organisms, 'Aorwa')[0])
+    walk = tree.walk()
+    pp.pprint(walk)
+    print(len(walk))
+
     turn = OrganismTurn(board, organisms, 'Maxoz', player_keys(organisms, 'Maxoz')[0])
     turn.take_turn([EAT, [EAT, ('blue', 9), ('purple', 13)]])
     turn.apply_actions(board)
@@ -657,11 +689,11 @@ def test_organism():
     organisms = board.find_organisms()
     print(organisms)
 
-    # tree = organism_tree(board, organisms, 'Aorwa', player_keys(organisms, 'Aorwa')[0])
     tree = OrganismTree(board, organisms, 'Aorwa', player_keys(organisms, 'Aorwa')[0])
     walk = tree.walk()
-    print(walk)
+    pp.pprint(walk)
     print(len(walk))
+
 
 
 
