@@ -340,6 +340,7 @@ class OrganismTree(object):
 
     def walk_grow_into(self, into_space):
         self.board.place_element(into_space, self.player, self.sequence.tup[1])
+        self.board.spaces[into_space]['food'] = 0
         self.organism.append(into_space)
         self.sequence.append(into_space)
 
