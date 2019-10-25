@@ -1,14 +1,14 @@
 # organism
 
-A Clojure library designed to ... well, that part is up to you.
+A library for the board game Organism.
 
-## Usage
+## usage
 
-FIXME
+python organism/organism.py
 
 ## License
 
-Copyright © 2019 FIXME
+Copyright © 2019 Ryan Spangler
 
 Distributed under the Eclipse Public License either version 1.0 or (at
 your option) any later version.

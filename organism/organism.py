@@ -217,8 +217,6 @@ def grow_consume_options(availability, total):
         for i in range(food):
             options.append(space)
     
-    print('options: {}'.format(options))
-
     return frozenset([
         histogram(consume)
         for consume in combinations(options, total)])
