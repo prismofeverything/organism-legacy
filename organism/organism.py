@@ -1,6 +1,7 @@
 import copy
 from math import factorial
 import numpy as np
+import matplotlib.pyplot as plt
 import pprint
 import collections
 from itertools import combinations
@@ -68,7 +69,7 @@ def build_rings(rings):
 
             if ring_index > 0:
                 ratio = (step / float(ring_index)) * (ring_index - 1)
-                inner = (rings[ring_index-1], int(np.ceil(ratio)))
+                inner = (rings[ring_index-1], int(np.ceil(ratio)) % ring_length(ring_index-1))
                 symmetric_adjacency(adjacencies, space, inner)
 
                 corner = step % ring_index == 0
@@ -184,6 +185,113 @@ class OrganismBoard(object):
                 invert[player][index].append(space)
 
         return invert
+
+    def find_players(self):
+        """
+        Return list of all player names.
+        """
+        players = set()
+
+        for _, space in self.spaces.items():
+            if space['element'] is not None:
+                players.add(space['element']['player'])
+
+        return list(players)
+
+    def draw(self, filename):
+        """
+        Draw the state of the board using matplotlib, output as file.
+        """
+        n_rings = len(self.rings)
+
+        fig, ax = plt.subplots(figsize=(5, 5))
+        ax.set_axis_off()
+        ax.set_xlim([-n_rings, n_rings])
+        ax.set_ylim([-n_rings, n_rings])
+
+        # Get coordinates of each board position
+        coords = {}
+
+        for ring_index, ring in enumerate(self.rings):
+            if ring_index == 0:
+                c = (0, 0)
+                coords[(ring, 0)] = c
+            else:
+                for step in range(6*ring_index):
+                    edge_index = step // ring_index
+                    position_index = step % ring_index
+
+                    c_x = (ring_index - position_index)*np.cos(edge_index*np.pi/3) + position_index*np.cos((edge_index + 1)*np.pi/3)
+                    c_y = (ring_index - position_index)*np.sin(edge_index*np.pi/3) + position_index*np.sin((edge_index + 1)*np.pi/3)
+
+                    c = (c_x, c_y)
+                    coords[(ring, step)] = c
+
+        # Designate color for each player
+        player_colors = ['#6D1300', '#001A6D', '#006D12']
+        players = self.find_players()
+
+        player2color = {}
+        for i, player in enumerate(players):
+            player2color[player] = player_colors[i%3]
+
+        # Draw board state for each position
+        for space in self.spaces.keys():
+            # Get coordinates for space
+            c = coords[space]
+
+            # Add background for each board position
+            background = plt.Circle(c, 0.45, fill=True, fc='#dddddd')
+            ax.add_artist(background)
+
+            if self.spaces[space]['element'] is not None:
+                # Add colored circles for each element type
+                type = self.spaces[space]['element']['type']
+
+                if type == EAT:
+                    element = plt.Circle(c, 0.45, fill=True, fc='#000000')
+                elif type == MOVE:
+                    element = plt.Circle(c, 0.45, fill=True, fc='#800080')
+                else:
+                    element = plt.Circle(c, 0.45, fill=True, fc='#228B22')
+
+                ax.add_artist(element)
+
+                # Add empty circles for each player name
+                player = self.spaces[space]['element']['player']
+                player_circle = plt.Circle(c, 0.45, fill=None, ec=player2color[player], lw=3)
+                ax.add_artist(player_circle)
+
+            # Add food
+            n_food = self.spaces[space]['food']
+
+            if n_food == 0:
+                continue
+            elif n_food == 1:
+                ax.plot(c[0], c[1], marker='D', color='r', ms=4)
+            elif n_food == 2:
+                ax.plot([c[0] - 0.15, c[0] + 0.15],
+                        [c[1], c[1]],
+                        marker='D', color='r', ms=4, ls='')
+            elif n_food == 3:
+                ax.plot([c[0] - 0.15, c[0] + 0.15, c[0]],
+                        [c[1] + 0.08, c[1] + 0.08, c[1] - 0.14],
+                        marker='D', color='r', ms=4, ls='')
+            elif n_food == 4:
+                ax.plot([c[0] - 0.13, c[0] - 0.13, c[0] + 0.13, c[0] + 0.13],
+                        [c[1] - 0.13, c[1] + 0.13, c[1] - 0.13, c[1] + 0.13],
+                        marker='D', color='r', ms=4, ls='')
+            elif n_food == 5:
+                ax.plot([c[0], c[0] - 0.2, c[0] + 0.2, c[0] - 0.13, c[0] + 0.13],
+                        [c[1] + 0.21, c[1] + 0.05, c[1] + 0.05, c[1] - 0.2, c[1] - 0.2],
+                        marker='D', color='r', ms=4, ls='')
+            else:
+                ax.plot(c[0] - 0.2, c[1], marker='D', color='r', ms=4)
+                ax.text(c[0] - 0.05, c[1] - 0.05, 'x' + str(n_food), color='r', verticalalignment='center')
+
+        # TODO: Add text for eliminator tokens
+
+        plt.savefig(filename)
 
 
 
@@ -622,6 +730,8 @@ def test_organism():
     board.place_element(('purple', 14), 'Maxoz', MOVE)
     board.place_element(('purple', 15), 'Maxoz', GROW)
 
+    board.draw('initial_board.png')
+
     if test_multiple_organisms:
         board.place_element(('orange', 1), 'Maxoz', EAT)
         board.place_element(('orange', 2), 'Maxoz', MOVE)
@@ -639,6 +749,8 @@ def test_organism():
     print(board.spaces[('blue', 1)])
     print(board.spaces[('blue', 2)])
 
+    board.draw('aorwa1.png')
+
     organisms = board.find_organisms()
     print(organisms)
 
@@ -654,6 +766,8 @@ def test_organism():
     print(board.spaces[('blue', 9)])
     print(board.spaces[('purple', 13)])
 
+    board.draw('maxoz1.png')
+
     organisms = board.find_organisms()
     print(organisms)
 
@@ -665,6 +779,8 @@ def test_organism():
     print(board.spaces[('blue', 1)])
     print(board.spaces[('blue', 2)])
 
+    board.draw('aorwa2.png')
+
     organisms = board.find_organisms()
     print(organisms)
 
@@ -674,6 +790,8 @@ def test_organism():
 
     print(board.spaces[('purple', 13)])
     print(board.spaces[('purple', 14)])
+
+    board.draw('maxoz2.png')
 
     organisms = board.find_organisms()
     print(organisms)
@@ -685,6 +803,8 @@ def test_organism():
     print(board.spaces[('blue', 1)])
     print(board.spaces[('blue', 2)])
 
+    board.draw('aorwa3.png')
+
     organisms = board.find_organisms()
     print(organisms)
 
@@ -692,10 +812,6 @@ def test_organism():
     walk = tree.walk()
     pp.pprint(walk)
     print(len(walk))
-
-
-
-
 
 if __name__ == '__main__':
     test_organism()
