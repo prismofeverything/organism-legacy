@@ -15,6 +15,12 @@ MOVE = 'MOVE'
 GROW = 'GROW'
 CIRCULATE = 'CIRCULATE'
 
+element_heterarchy = {
+    EAT: GROW,
+    GROW: MOVE,
+    MOVE: EAT
+}
+
 def items(d):
     return list(d.items())
 
@@ -80,10 +86,57 @@ def build_rings(rings):
                 symmetric_adjacency(adjacencies, space, (ring, (step+1) % length))
 
     return adjacencies
-            
+
+def topological_sort(edges):
+    """
+    Returns a sorted list of directed edges, in the topological order of the
+    source nodes.
+    """
+    nodes = []
+    for edge in edges:
+        nodes.extend(list(edge))
+    nodes = list(set(nodes))
+
+    # Calculate in-degrees for each node
+    in_degrees = {node: 0 for node in nodes}
+
+    for edge in edges:
+        in_degrees[edge[1]] += 1
+
+    # Initialize node queue and sorted list
+    sorted_nodes = []
+    node_queue = []
+
+    for node in nodes:
+        if in_degrees[node] == 0:
+            node_queue.append(node)
+
+    # Do sorting of nodes
+    while len(node_queue) > 0:
+        next_node = node_queue.pop(0)
+
+        for edge in edges:
+            if edge[0] == next_node:
+                in_degrees[edge[1]] -= 1
+
+                if in_degrees[edge[1]] == 0:
+                    node_queue.append(edge[1])
+
+        sorted_nodes.append(next_node)
+
+    # Get sorted edge list
+    sorted_edges = []
+
+    for node in sorted_nodes:
+        for edge in edges:
+            if edge[0] == node:
+                sorted_edges.append(edge)
+
+    return sorted_edges
+
 
 class OrganismBoard(object):
-    def __init__(self, rings):
+    def __init__(self, rings, n_tokens_to_win=7, n_organisms_to_win=3):
         self.rings = rings
         self.rows = build_rows(len(rings))
         self.adjacencies = build_rings(rings)
@@ -93,10 +146,20 @@ class OrganismBoard(object):
                 'food': 0}
             for space in self.adjacencies.keys()}
 
+        # Initialize win conditions
+        self.n_tokens_to_win = n_tokens_to_win
+        self.n_organisms_to_win = n_organisms_to_win
+
+        # Initialize counts of tokens for each player
+        self.tokens = {}
+
     def place_element(self, space, player, element):
         self.spaces[space]['element'] = {
             'player': player,
             'type': element}
+
+        if player not in self.tokens:
+            self.tokens[player] = 0
 
     def add_food(self, space, amount):
         self.spaces[space]['food'] += amount
@@ -190,13 +253,108 @@ class OrganismBoard(object):
         """
         Return list of all player names.
         """
-        players = set()
+        return self.tokens.keys()
 
-        for _, space in self.spaces.items():
-            if space['element'] is not None:
-                players.add(space['element']['player'])
+    def find_winners(self):
+        """
+        Returns a list of players that have won the game. Returns empty list
+        if the game has not ended yet.
+        """
+        winners = []
 
-        return list(players)
+        # Find player with the only surviving organism
+        organisms = self.find_organisms()
+        players_with_organisms = list(organisms.keys())
+        if len(players_with_organisms) == 1:
+            winners.append(players_with_organisms[0])
+        # If no organisms exist on the board, all players are winners
+        elif len(players_with_organisms) == 0:
+            winners.extend(self.find_players())
+
+        # Find players with organisms equal to or more than the number to win
+        if self.n_organisms_to_win > 0:
+            for player, player_organisms in organisms.items():
+                if len(player_organisms) >= self.n_organisms_to_win:
+                    winners.append(player)
+
+        # Find players with tokens equal to or more than the number to win
+        if self.n_tokens_to_win > 0:
+            for player, n_tokens in self.tokens.items():
+                if n_tokens >= self.n_tokens_to_win:
+                    winners.append(player)
+
+        return list(set(winners))
+
+    def resolve_conflicts(self):
+        """
+        Resolves all conflicts between adjacent elements on the board.
+        """
+        conflicts = []  # List of (victim_space, attacking_space) tuples
+
+        for space, state in items(self.spaces):
+            if state['element'] is not None:
+                player = state['element']['player']
+                element_type = state['element']['type']
+
+                for adjacent_space in self.adjacencies[space]:
+                    adjacent_state = self.spaces[adjacent_space]
+
+                    if adjacent_state['element'] is not None:
+                        adjacent_player = adjacent_state['element']['player']
+                        adjacent_element_type = adjacent_state['element']['type']
+
+                        if adjacent_player != player and adjacent_element_type == element_heterarchy[element_type]:
+                            conflicts.append((adjacent_space, space))
+                            self.tokens[player] += 1
+
+        # Topologically sort the list of conflicts
+        sorted_conflicts = topological_sort(conflicts)
+
+        # Dissolve elements for each conflict
+        for conflict in sorted_conflicts:
+            self._dissolve_element(*conflict)
+
+    def _dissolve_element(self, victim_space, attacking_space):
+        """
+        Dissolves the element inside victim_space. Food that existed in this
+        space is claimed by the element in attacking_space.
+        """
+        # Add food to attacking space
+        self.spaces[attacking_space]['food'] += self.spaces[victim_space]['food']
+
+        # Remove element and food
+        self.spaces[victim_space]['element'] = None
+        self.spaces[victim_space]['food'] = 0
+
+    def check_organism_integrity(self):
+        """
+        Checks integrity of each organism, and removes any organisms that lack
+        any of the three elements.
+        """
+        full_set = {'EAT', 'GROW', 'MOVE'}
+        organisms = self.find_organisms()
+
+        for player, player_organisms in organisms.items():
+            for organism in player_organisms.values():
+                element_types = [self.spaces[space]['element']['type'] for space in organism]
+
+                if set(element_types) != full_set:
+                    for space in organism:
+                        self._remove_element(space)
+
+                    n_removed_elements = len(organism)
+
+                    # Add tokens for all other players
+                    for p in self.find_players():
+                        if p != player:
+                            self.tokens[p] += n_removed_elements
+
+    def _remove_element(self, space):
+        """
+        Removes element in given space, leaving one food behind.
+        """
+        self.spaces[space]['element'] = None
+        self.spaces[space]['food'] += 1
 
     def draw(self, filename):
         """
@@ -233,7 +391,7 @@ class OrganismBoard(object):
 
         player2color = {}
         for i, player in enumerate(players):
-            player2color[player] = player_colors[i%3]
+            player2color[player] = player_colors[i % 3]
 
         # Draw board state for each position
         for space in self.spaces.keys():
@@ -281,18 +439,19 @@ class OrganismBoard(object):
                 ax.plot([c[0] - 0.13, c[0] - 0.13, c[0] + 0.13, c[0] + 0.13],
                         [c[1] - 0.13, c[1] + 0.13, c[1] - 0.13, c[1] + 0.13],
                         marker='D', color='r', ms=4, ls='')
-            elif n_food == 5:
-                ax.plot([c[0], c[0] - 0.2, c[0] + 0.2, c[0] - 0.13, c[0] + 0.13],
-                        [c[1] + 0.21, c[1] + 0.05, c[1] + 0.05, c[1] - 0.2, c[1] - 0.2],
-                        marker='D', color='r', ms=4, ls='')
             else:
                 ax.plot(c[0] - 0.2, c[1], marker='D', color='r', ms=4)
                 ax.text(c[0] - 0.05, c[1] - 0.05, 'x' + str(n_food), color='r', verticalalignment='center')
 
-        # TODO: Add text for eliminator tokens
+        # Add number of tokens each player has won
+        token_str = ''
+        for player, n_tokens in self.tokens.items():
+            token_str += '%s: %2d\n' % (player, n_tokens)
 
+        ax.text(0, -n_rings - 0.5, token_str, horizontalalignment='center')
+
+        # Save figure
         plt.savefig(filename)
-
 
 
 class expanding_tuple(object):
@@ -698,9 +857,13 @@ class OrganismTurn(object):
         for choice in self.choices:
             choice.apply_action(board)
 
+        board.resolve_conflicts()
+        board.check_organism_integrity()
+
 
 def player_keys(organisms, player):
     return list(organisms[player].keys())
+
 
 def test_organism():
     board = OrganismBoard([
