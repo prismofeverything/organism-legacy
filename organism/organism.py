@@ -750,18 +750,18 @@ class CirculateAction(OrganismAction):
         board.spaces[self.to_space]['food'] += 1
 
 class EatAction(OrganismAction):
-    def __init__(self, from_space, to_space):
-        self.from_space = from_space
-        self.to_space = to_space
+    def __init__(self, eat_space, food_space):
+        self.eat_space = eat_space
+        self.food_space = food_space
 
     def apply_action(self, board):
-        assert board.spaces[self.from_space]['element'] == None
-        assert board.spaces[self.from_space]['food'] > 0
-        assert board.spaces[self.to_space]['element']['type'] == EAT
-        assert board.spaces[self.to_space]['food'] < 3
+        assert board.spaces[self.eat_space]['element']['type'] == EAT
+        assert board.spaces[self.eat_space]['food'] < 3
+        assert board.spaces[self.food_space]['element'] == None
+        assert board.spaces[self.food_space]['food'] > 0
 
-        board.spaces[self.from_space]['food'] -= 1
-        board.spaces[self.to_space]['food'] += 1
+        board.spaces[self.food_space]['food'] -= 1
+        board.spaces[self.eat_space]['food'] += 1
 
 class MoveAction(OrganismAction):
     def __init__(self, from_space, to_space, push_food_space):
@@ -787,25 +787,24 @@ class MoveAction(OrganismAction):
             'food': 0}
 
 class GrowAction(OrganismAction):
-    def __init__(self, element_type, consume_food, birth_space, push_food_space):
+    def __init__(self, element_type, consume_food, birth_space):
         self.consume_food = consume_food
         self.element_type = element_type
         self.birth_space = birth_space
-        self.push_food_space = push_food_space
 
     def apply_action(self, board):
-        player = board.space_player(list(self.consume_food.keys())[0])
+        player = board.space_player(self.consume_food[0][0])
         adjacent_grow_elements = board.adjacent_elements_of_type(self.birth_space, player, GROW)
 
-        for space, consume in items(self.consume_food):
+        for space, consume in self.consume_food:
             assert board.spaces[space]['food'] >= consume
             assert board.spaces[space]['element']['type'] == GROW
 
         assert board.spaces[self.birth_space]['element'] is None
         assert len(adjacent_grow_elements) > 0
 
-        board.push_food(self.birth_space, self.push_food_space)
-        for space, consume in items(self.consume_food):
+        board.spaces[self.birth_space]['food'] = 0
+        for space, consume in self.consume_food:
             board.spaces[space]['food'] -= consume
         board.spaces[self.birth_space]['element'] = {
             'player': player,
@@ -923,7 +922,7 @@ def test_organism():
     print(len(walk))
 
     turn = OrganismTurn(board, organisms, 'Maxoz', player_keys(organisms, 'Maxoz')[0])
-    turn.take_turn([EAT, [EAT, ('blue', 9), ('purple', 13)]])
+    turn.take_turn([EAT, [EAT, ('purple', 13), ('blue', 9)]])
     turn.apply_actions(board)
 
     print(board.spaces[('blue', 9)])
@@ -935,7 +934,7 @@ def test_organism():
     print(organisms)
 
     turn = OrganismTurn(board, organisms, 'Aorwa', player_keys(organisms, 'Aorwa')[0])
-    turn.take_turn([GROW, [GROW, GROW, {('blue', 2): 1}, ('blue', 1), ('blue', 0)]])
+    turn.take_turn([GROW, [GROW, GROW, ((('blue', 2), 1),), ('blue', 1)]])
     turn.apply_actions(board)
 
     print(board.spaces[('blue', 0)])
@@ -978,4 +977,3 @@ def test_organism():
 
 if __name__ == '__main__':
     test_organism()
-
