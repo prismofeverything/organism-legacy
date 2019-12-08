@@ -38,8 +38,6 @@ class Arena():
             or
                 draw result returned from the game that is neither 1, -1, nor 0.
         """
-        verbose = True
-
         player1_mcts = MCTS(self.game, self.player1, self.args)
         player2_mcts = MCTS(self.game, self.player2, self.args)
         curPlayer = 1
