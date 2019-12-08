@@ -291,9 +291,10 @@ class OrganismBoard(object):
         players_with_organisms = list(organisms.keys())
         if len(players_with_organisms) == 1:
             winners.append(players_with_organisms[0])
-        # If no organisms exist on the board, all players are winners
+        # If no organisms exist on the board, current player is the winner
+        # (Opponent committed suicide)
         elif len(players_with_organisms) == 0:
-            winners.extend(self.find_players())
+            winners.append(self.current_player)
 
         # Find players with organisms equal to or more than the number to win
         if self.n_organisms_to_win > 0:
@@ -494,6 +495,7 @@ class OrganismBoard(object):
 
         # Save figure
         plt.savefig(filename)
+        plt.close()
 
     def _build_axial_coords(self, space):
         """
@@ -529,7 +531,7 @@ class OrganismBoard(object):
         Arguments:
             first_player: name of the first player
         """
-        array_form = np.zeros((2*self.n_rings - 1, 2*self.n_rings - 1, 11))
+        array_form = np.zeros((11, 2*self.n_rings - 1, 2*self.n_rings - 1))
 
         # Get name of opponent (assumes there are just two players)
         opponent = self._find_opponent(first_player)
@@ -539,25 +541,25 @@ class OrganismBoard(object):
             coords = self.space_to_axial_coords[space]
 
             # Add food to 7th layer
-            array_form[coords[0], coords[1], 6] = specs['food']
+            array_form[6, coords[0], coords[1]] = specs['food']
 
             if specs['element'] is not None:
                 player = specs['element']['player']
                 element_type = specs['element']['type']
 
-                array_form[coords[0], coords[1], 3*(player == opponent) + self.element_order[element_type]] = 1
+                array_form[3*(player == opponent) + self.element_order[element_type], coords[0], coords[1]] = 1
 
         # Add layers for remaining tokens to win game
-        array_form[:, :, 7] = self.n_tokens_to_win - self.tokens[first_player]
-        array_form[:, :, 8] = self.n_tokens_to_win - self.tokens[opponent]
+        array_form[7, :, :] = self.n_tokens_to_win - self.tokens[first_player]
+        array_form[8, :, :] = self.n_tokens_to_win - self.tokens[opponent]
 
         # Add layers to indicate moveable organisms and current player
         for spaces in self.organisms_to_move:
             for space in spaces:
                 coords = self.space_to_axial_coords[space]
-                array_form[coords[0], coords[1], 9] = 1
+                array_form[9, coords[0], coords[1]] = 1
 
-        array_form[:, :, 10] = 2*((first_player == self.current_player) - 0.5)
+        array_form[10, :, :] = 2*((first_player == self.current_player) - 0.5)
 
         return array_form
 
@@ -567,7 +569,7 @@ class OrganismBoard(object):
         """
         assert len(player_list) == 2
 
-        elements_array = array[:, :, :6]
+        elements_array = array[:6, :, :]
 
         # Fill in elements and food
         for i in range(array.shape[0]):
@@ -577,7 +579,7 @@ class OrganismBoard(object):
                 if space is None:
                     continue
 
-                k = np.where(elements_array[i, j, :])[0]
+                k = np.where(elements_array[:, i, j])[0]
 
                 if len(k) == 1:
                     k = k[0]
@@ -595,22 +597,23 @@ class OrganismBoard(object):
                     elif k == 5:
                         self.place_element(space, player_list[1], GROW)
 
-                self.spaces[space]['food'] = int(array[i, j, 6])
+                self.spaces[space]['food'] = int(array[6, i, j])
 
         # Get current number of tokens for each player
-        self.tokens[player_list[0]] = self.n_tokens_to_win - int(array[0, 0, 7])
-        self.tokens[player_list[1]] = self.n_tokens_to_win - int(array[0, 0, 8])
+        self.tokens[player_list[0]] = self.n_tokens_to_win - int(array[7, 0, 0])
+        self.tokens[player_list[1]] = self.n_tokens_to_win - int(array[8, 0, 0])
 
         # Get active organisms and current player
-        if array[0, 0, 10] == 1:
+        if array[10, 0, 0] == 1:
             self.current_player = player_list[0]
         else:
             self.current_player = player_list[1]
 
-        player_organisms = [x for x in self.find_organisms()[self.current_player].values()]
+        org_dict = self.find_organisms().get(self.current_player, {})
+        player_organisms = [x for x in org_dict.values()]
         organism_indexes = []
 
-        for i, j in zip(np.where(array[:, :, 9])[0], np.where(array[:, :, 9])[1]):
+        for i, j in zip(np.where(array[9, :, :])[0], np.where(array[9, :, :])[1]):
             space = self.axial_coords_to_space[(i, j)]
 
             for index, organism in enumerate(player_organisms):
@@ -644,6 +647,12 @@ class OrganismBoard(object):
         # Switch player if current player has moved all organisms
         if len(self.organisms_to_move) == 0:
             self.set_current_player(self._find_opponent(player))
+
+    def pass_turn(self):
+        """
+        Pass the turn without making any moves.
+        """
+        self.set_current_player(self._find_opponent(self.current_player))
 
     def _find_opponent(self, player):
         """
@@ -789,7 +798,23 @@ class OrganismTree(object):
                     for empty_space in empty_spaces]
 
     def walk_move(self):
-        move_elements = self.board.elements_of(self.organism, MOVE)
+        try:
+            move_elements = self.board.elements_of(self.organism, MOVE)
+        except TypeError:
+            player_organisms = self.board.find_organisms()[self.player]
+            for organism in player_organisms.values():
+                break_loop = False
+                for pos in self.organism:
+                    if pos in organism:
+                        self.organism = organism
+                        break_loop = True
+                        break
+
+                if break_loop:
+                    break
+
+            move_elements = self.board.elements_of(self.organism, MOVE)
+
         adjacent_spaces = [
             self.board.adjacencies[move_space]
             for move_space in move_elements.keys()]
@@ -966,7 +991,7 @@ class EatAction(OrganismAction):
         board.spaces[self.eat_space]['food'] += 1
 
 class MoveAction(OrganismAction):
-    def __init__(self, from_space, to_space, push_food_space):
+    def __init__(self, from_space, to_space, push_food_space=None):
         self.from_space = from_space
         self.to_space = to_space
         self.push_food_space = push_food_space
@@ -982,7 +1007,8 @@ class MoveAction(OrganismAction):
         assert len(adjacent_move_elements) > 0
         assert board.spaces[self.to_space]['element'] is None
 
-        board.push_food(self.to_space, self.push_food_space)
+        if self.push_food_space is not None:
+            board.push_food(self.to_space, self.push_food_space)
         board.spaces[self.to_space] = board.spaces[self.from_space]
         board.spaces[self.from_space] = {
             'element': None,
