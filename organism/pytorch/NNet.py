@@ -105,7 +105,7 @@ class NNetWrapper(NeuralNet):
         # preparing input
         board = torch.FloatTensor(board.astype(np.float64))
         if args.cuda: board = board.contiguous().cuda()
-        board = board.view(1, self.board_x, self.board_y)
+        board = board.view(11, self.board_x, self.board_y)
         self.nnet.eval()
         with torch.no_grad():
             v = self.nnet(board)

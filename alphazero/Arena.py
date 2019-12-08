@@ -1,12 +1,16 @@
 import numpy as np
 from pytorch_classification.utils import Bar, AverageMeter
+from MCTS import MCTS
 import time
+
+TIE_THRESHOLD = 60
+TEMP_THRESHOLD = 20
 
 class Arena():
     """
     An Arena class where any 2 agents can be pit against each other.
     """
-    def __init__(self, player1, player2, game, display=None):
+    def __init__(self, player1, player2, game, args, display=None):
         """
         Input:
             player 1,2: two functions that takes board as input, return action
@@ -21,6 +25,7 @@ class Arena():
         self.player1 = player1
         self.player2 = player2
         self.game = game
+        self.args = args
         self.display = display
 
     def playGame(self, verbose=False):
@@ -33,29 +38,40 @@ class Arena():
             or
                 draw result returned from the game that is neither 1, -1, nor 0.
         """
-        players = [self.player2, None, self.player1]
+        player1_mcts = MCTS(self.game, self.player1, self.args)
+        player2_mcts = MCTS(self.game, self.player2, self.args)
         curPlayer = 1
         board = self.game.getInitBoard()
         it = 0
-        while self.game.getGameEnded(board, curPlayer)==0:
+        while self.game.getGameEnded(board, curPlayer)==0 and it < TIE_THRESHOLD:
             it+=1
+
             if verbose:
-                assert(self.display)
-                print("Turn ", str(it), "Player ", str(curPlayer))
-                self.display(board)
-            action = players[curPlayer+1](self.game.getCanonicalForm(board, curPlayer))
+                self.game._get_board_from_state(board).draw('%d.png' % (it))
 
-            valids = self.game.getValidMoves(self.game.getCanonicalForm(board, curPlayer),1)
+            canonicalForm = self.game.getCanonicalForm(board, curPlayer)
 
-            if valids[action]==0:
-                print(action)
-                assert valids[action] >0
-            board, curPlayer = self.game.getNextState(board, curPlayer, action)
+            temp = int(it <= TEMP_THRESHOLD)*0.7
+
+            if curPlayer == 1:
+                pi = player1_mcts.getActionProb(canonicalForm, it - 1, temp=temp)
+            else:
+                pi = player2_mcts.getActionProb(canonicalForm, it - 1, temp=temp)
+
+            action = np.random.choice(len(pi), p=pi)
+
+            valid_moves, next_states = self.game.getValidMoves(board, curPlayer)
+            board, curPlayer = next_states[action]
+
         if verbose:
-            assert(self.display)
-            print("Game over: Turn ", str(it), "Result ", str(self.game.getGameEnded(board, 1)))
-            self.display(board)
-        return self.game.getGameEnded(board, 1)
+            self.game._get_board_from_state(board).draw('%d.png' % (it))
+
+        if it < TIE_THRESHOLD:
+            print("Result ", str(self.game.getGameEnded(board, 1)))
+            return self.game.getGameEnded(board, 1)
+        else:  # Draws
+            print("Result Draw")
+            return 0
 
     def playGames(self, num, verbose=False):
         """

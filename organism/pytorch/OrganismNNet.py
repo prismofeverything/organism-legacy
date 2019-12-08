@@ -17,7 +17,7 @@ class OrganismNNet(nn.Module):
         self.args = args
 
         super(OrganismNNet, self).__init__()
-        self.conv1 = HexaConv2d(1, args.num_channels, 3, stride=1, padding=1)
+        self.conv1 = HexaConv2d(11, args.num_channels, 3, stride=1, padding=1)
         self.conv2 = HexaConv2d(args.num_channels, args.num_channels, 3, stride=1, padding=1)
         self.conv3 = HexaConv2d(args.num_channels, args.num_channels, 3, stride=1)
         self.conv4 = HexaConv2d(args.num_channels, args.num_channels, 3, stride=1)
@@ -37,7 +37,7 @@ class OrganismNNet(nn.Module):
 
     def forward(self, s):
         #                                                           s: batch_size x board_x x board_y
-        s = s.view(-1, 1, self.board_x, self.board_y)                # batch_size x 1 x board_x x board_y
+        s = s.view(-1, 11, self.board_x, self.board_y)               # batch_size x 11 x board_x x board_y
         s = F.relu(self.bn1(self.conv1(s)))                          # batch_size x num_channels x board_x x board_y
         s = F.relu(self.bn2(self.conv2(s)))                          # batch_size x num_channels x board_x x board_y
         s = F.relu(self.bn3(self.conv3(s)))                          # batch_size x num_channels x (board_x-2) x (board_y-2)
@@ -58,12 +58,12 @@ class HexaConv2d(nn.Conv2d):
 
         assert kernel_size % 2 == 1
 
-        self.mask = torch.zeros((kernel_size, kernel_size), dtype=bool)
+        self.mask = torch.zeros((kernel_size, kernel_size))
 
         for i in range(kernel_size):
             for j in range(kernel_size):
                 if abs(i + j - (kernel_size - 1)) <= (kernel_size // 2):
-                    self.mask[i, j] = True
+                    self.mask[i, j] = 1
 
         super(HexaConv2d, self).__init__(in_channels, out_channels, kernel_size, stride,
             padding, dilation, groups, bias, padding_mode)

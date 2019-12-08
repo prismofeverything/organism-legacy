@@ -23,6 +23,8 @@ MOVE = 'MOVE'
 GROW = 'GROW'
 CIRCULATE = 'CIRCULATE'
 
+PASS = 'PASS'
+
 
 class OrganismGame(Game):
 
@@ -77,7 +79,7 @@ class OrganismGame(Game):
 		Returns:
 			actionSize: number of all possible actions
 		"""
-		valid_moves = self.getValidMoves(state, player)
+		valid_moves, _ = self.getValidMoves(state, player)
 		return len(valid_moves)
 
 	def getNextState(self, state, player, action):
@@ -92,6 +94,11 @@ class OrganismGame(Game):
 			nextPlayer: player who plays in the next turn
 		"""
 		board = self._get_board_from_state(state)
+
+		if action == PASS:
+			next_board = copy.deepcopy(board)
+			next_board.pass_turn()
+			return next_board.get_array_form('CS'), PLAYER_INDEXES[next_board.current_player]
 
 		organism_index, move = action
 		player_name = PLAYER_NAMES[player]
@@ -123,7 +130,7 @@ class OrganismGame(Game):
 		organisms = board.find_organisms()
 		player_organisms = organisms[player_name]
 
-		valid_moves = []
+		moves = []
 
 		for index, organism in player_organisms.items():
 			organism_is_movable = False
@@ -138,9 +145,39 @@ class OrganismGame(Game):
 				walk = tree.walk()
 
 				for m in walk:
-					valid_moves.append((index, m))
+					moves.append((index, m))
 
-		return valid_moves
+		next_states = []
+		valid_moves = []
+		next_states_hashed = set()
+
+		for move in moves:
+			try:
+				next_state = self.getNextState(state, player, move)
+
+				if np.all(state[:7, :, :] == next_state[0][:7, :, :]):
+					continue
+
+				next_state_hashed = next_state[0].tostring()
+
+				if next_state_hashed in next_states_hashed:
+					continue
+				else:
+					next_states_hashed.add(next_state_hashed)
+
+				next_states.append(next_state)
+				valid_moves.append(move)
+			except:
+				continue
+
+		assert len(next_states) == len(valid_moves)
+
+		# If there are no valid moves, add "pass" as only possible move
+		if len(valid_moves) == 0:
+			valid_moves.append(PASS)
+			next_states.append(self.getNextState(state, player, PASS))
+
+		return valid_moves, next_states
 
 	def getGameEnded(self, state, player):
 		"""
@@ -162,8 +199,11 @@ class OrganismGame(Game):
 				return 1
 			else:
 				return -1
-		else:  # Assume player lost if both players won (game tied)
-			return -1
+		else:  # Tie? Current player wins game.
+			if board.current_player == PLAYER_NAMES[player]:
+				return 1
+			else:
+				return -1
 
 	def getCanonicalForm(self, state, player):
 		"""
@@ -202,7 +242,7 @@ class OrganismGame(Game):
 
 		# Add all rotations
 		symmetric_forms.extend(self._get_rotated_states(state, axial_coords_to_pos, pos_to_axial_coords))
-		reflected_state = np.transpose(state, (1, 0, 2))
+		reflected_state = np.transpose(state, (0, 2, 1))
 		symmetric_forms.extend(
 			self._get_rotated_states(reflected_state, axial_coords_to_pos, pos_to_axial_coords))
 
@@ -216,9 +256,11 @@ class OrganismGame(Game):
 
 		for rot in range(6):
 			rotated_state = np.zeros_like(state)
+			rotated_state[7:9, :, :] = state[7:9, :, :]
+			rotated_state[10, :, :] = state[10, :, :]
 
 			# Fix center point
-			rotated_state[self.n_rings - 1, self.n_rings - 1, :] = state[self.n_rings - 1, self.n_rings - 1, :]
+			rotated_state[:, self.n_rings - 1, self.n_rings - 1] = state[:, self.n_rings - 1, self.n_rings - 1]
 
 			for i in range(rotated_state.shape[0]):
 				for j in range(rotated_state.shape[0]):
@@ -232,7 +274,7 @@ class OrganismGame(Game):
 						new_pos = (pos[0], (pos[1] - ring_index*rot) % (6*ring_index))
 						new_axial_coords = pos_to_axial_coords[new_pos]
 
-						rotated_state[new_axial_coords[0], new_axial_coords[1], :] = state[i, j, :]
+						rotated_state[:, new_axial_coords[0], new_axial_coords[1]] = state[:, i, j]
 
 			rotated_forms.append(rotated_state)
 
@@ -250,6 +292,22 @@ class OrganismGame(Game):
 		boardString = state.tostring()
 		return boardString
 
+	def is_first_move(self, state):
+		"""
+		Returns True if the next move by the current player is the first move
+		of the player's turn.
+		"""
+		board = self._get_board_from_state(state)
+		organisms = board.find_organisms()
+
+		if board.current_player in organisms:
+			n_player_organisms = len(organisms[board.current_player])
+		else:
+			n_player_organisms = 0
+		n_movable_organisms = len(board.organisms_to_move)
+
+		return n_player_organisms == n_movable_organisms
+
 	def _get_board_from_state(self, state):
 		"""
 		Returns the board representation given a state array.
@@ -265,21 +323,21 @@ class OrganismGame(Game):
 		flipped_state = np.zeros_like(state)
 
 		# Flip element positions
-		flipped_state[:, :, 0:3] = state[:, :, 3:6]
-		flipped_state[:, :, 3:6] = state[:, :, 0:3]
+		flipped_state[0:3, :, :] = state[3:6, :, :]
+		flipped_state[3:6, :, :] = state[0:3, :, :]
 
 		# Food stays same
-		flipped_state[:, :, 6] = state[:, :, 6]
+		flipped_state[6, :, :] = state[6, :, :]
 
 		# Flip scores
-		flipped_state[:, :, 7] = state[:, :, 8]
-		flipped_state[:, :, 8] = state[:, :, 7]
+		flipped_state[7, :, :] = state[8, :, :]
+		flipped_state[8, :, :] = state[7, :, :]
 
 		# Playable organisms stay same
-		flipped_state[:, :, 9] = state[:, :, 9]
+		flipped_state[9, :, :] = state[9, :, :]
 
 		# Current player flipped
-		flipped_state[:, :, 10] = -state[:, :, 10]
+		flipped_state[10, :, :] = -state[10, :, :]
 
 		return flipped_state
 
@@ -294,25 +352,26 @@ def test_game():
 	    n_tokens_to_win=n_tokens_to_win, n_organisms_to_win=n_organisms_to_win)
 	init_state = game.getInitBoard()
 
+	board = game._get_board_from_state(init_state)
+	board.draw('test.png')
 	print(init_state)
 	print(game.getGameEnded(init_state, 1))
 
-	valid_moves = game.getValidMoves(init_state, 1)
-	print(valid_moves)
+	valid_moves, next_states = game.getValidMoves(init_state, 1)
+	print(len(valid_moves))
 
-	state, player = game.getNextState(init_state, 1, valid_moves[6])
+	state, player = game.getNextState(init_state, 1, valid_moves[i])
 
 	print(state)
 	print(game.getGameEnded(state, 1))
 
 	board = game._get_board_from_state(state)
-	board.draw('test.png')
 
 	valid_moves = game.getValidMoves(state, -1)
 	print(valid_moves)
 
 	symmetric_forms = game.getSymmetries(state)
-	print(len(symmetric_forms))
+	print(symmetric_forms)
 
 
 if __name__ == '__main__':
