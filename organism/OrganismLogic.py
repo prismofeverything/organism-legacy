@@ -226,6 +226,12 @@ class OrganismBoard(object):
             for adjacent_space in self.adjacencies[space]
             if self.spaces[adjacent_space]['element'] and self.spaces[adjacent_space]['element']['player'] == player and self.spaces[adjacent_space]['element']['type'] == element_type]
 
+    def obstructing_elements(self, space, player, element_type):
+        return [
+            adjacent_space
+            for adjacent_space in self.adjacencies[space]
+            if self.spaces[adjacent_space]['element'] and self.spaces[adjacent_space]['element']['player'] != player and self.spaces[adjacent_space]['element']['type'] == element_type]
+
     def elements(self, spaces):
         return [
             self.spaces[space]['element']
@@ -773,7 +779,7 @@ class OrganismTree(object):
         open_spaces = [
             open_space
             for open_space in self.board.adjacencies[to_space]
-            if open_space != from_space and not self.board.spaces[open_space]['element']]
+            if open_space != from_space and self.board.spaces[open_space]['element'] is None]
 
         if self.board.spaces[to_space]['food'] > 0 and len(open_spaces) > 0:
             return [
@@ -781,15 +787,21 @@ class OrganismTree(object):
                 for open_space in open_spaces]
         else:
             self.board.move_element(from_space, to_space)
+            self.organism.remove(from_space)
+            self.organism.append(to_space)
+
             return self.walk_order()
 
     def walk_move_from(self, space):
         board = self.board
-        if self.board.space_player(space) == self.player and self.board.spaces[space]['food'] > 0:
+        player = self.board.space_player(space)
+        element_type = self.board.spaces[space]['element']['type']
+
+        if self.board.spaces[space]['food'] > 0:
             empty_spaces = [
                 empty_space
                 for empty_space in self.board.adjacencies[space]
-                if not self.board.spaces[empty_space]['element']]
+                if self.board.spaces[empty_space]['element'] is None and len(self.board.obstructing_elements(empty_space, player, element_type)) == 0]
 
             if len(empty_spaces) > 0:
                 self.sequence.append(space)
@@ -818,7 +830,11 @@ class OrganismTree(object):
         adjacent_spaces = [
             self.board.adjacencies[move_space]
             for move_space in move_elements.keys()]
-        flat_spaces = frozenset([item for sublist in adjacent_spaces for item in sublist] + list(move_elements.keys()))
+        flat_spaces = frozenset([
+            item
+            for sublist in adjacent_spaces
+            for item in sublist
+            if self.board.space_player(item) == self.player] + list(move_elements.keys()))
 
         return [
             self.clone().walk_move_from(space)
@@ -1094,6 +1110,68 @@ def player_keys(organisms, player):
     return list(organisms[player].keys())
 
 
+def test_proximity():
+    board = OrganismBoard([
+        'red',
+        'orange',
+        'green'])
+
+    board.initialize_food({
+        'green': 1,
+        'orange': 2,
+        'red': 3})
+
+    board.place_element(('green', 1), 'Balam', EAT)
+    board.place_element(('green', 2), 'Balam', MOVE)
+    board.place_element(('green', 3), 'Balam', GROW)
+
+    board.place_element(('green', 7), 'Omdor', EAT)
+    board.place_element(('green', 8), 'Omdor', MOVE)
+    board.place_element(('green', 9), 'Omdor', GROW)
+
+    board.draw('small_board.png')
+
+    organisms = board.find_organisms()
+    print(organisms)
+
+    turn = OrganismTurn(board, organisms, 'Balam', player_keys(organisms, 'Balam')[0])
+    turn.take_turn([MOVE, [MOVE, ('green', 2), ('orange', 1), ('orange', 0)]])
+    # turn.take_turn([GROW, [GROW, MOVE, ((('green', 3), 1),), ('orange', 1)]])
+    turn.apply_actions(board)
+    organisms = board.find_organisms()
+
+    board.draw('balam1.png')
+
+    turn = OrganismTurn(board, organisms, 'Omdor', player_keys(organisms, 'Omdor')[0])
+    turn.take_turn([MOVE, [MOVE, ('green', 7), ('orange', 4), ('orange', 3)]])
+    turn.apply_actions(board)
+    organisms = board.find_organisms()
+
+    board.draw('omdor1.png')
+
+    turn = OrganismTurn(board, organisms, 'Balam', player_keys(organisms, 'Balam')[0])
+    turn.take_turn([MOVE, [MOVE, ('green', 1), ('orange', 0), ('orange', 5)]])
+    turn.apply_actions(board)
+    organisms = board.find_organisms()
+
+    board.draw('balam2.png')
+
+    tree = OrganismTree(board, organisms, 'Balam', player_keys(organisms, 'Balam')[0])
+    walk = tree.walk()
+    print(walk)
+
+    moves = [
+        move
+        for action in walk if action[0] == 'MOVE'
+        for move in action[1:] if move[0] == 'MOVE']
+
+    print(moves)
+    print(board.obstructing_elements(('red', 0), 'Balam', EAT))
+
+    for move in moves:
+        assert not (move[1] == ('orange', 0) and move[2] == ('red', 0))
+
+
 def test_organism():
     board = OrganismBoard([
         'red',
@@ -1209,3 +1287,4 @@ def test_organism():
 
 if __name__ == '__main__':
     test_organism()
+    test_proximity()
