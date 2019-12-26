@@ -745,7 +745,7 @@ class OrganismTree(object):
             return self.action_code()
 
     def walk_eat_from(self, space, food_space):
-        self.board.move_food(space, food_space)
+        self.board.move_food(food_space, space)
         self.sequence.append(food_space)
 
         return self.walk_order()
@@ -1177,6 +1177,28 @@ def test_proximity():
 
     for move in moves:
         assert not (move[1] == ('orange', 0) and move[2] == ('red', 0))
+
+    turn = OrganismTurn(board, organisms, 'Omdor', player_keys(organisms, 'Omdor')[0])
+    turn.take_turn([GROW, [GROW, EAT, ((('green', 9), 1),), ('green', 10)]])
+    turn.apply_actions(board)
+    organisms = board.find_organisms()
+
+    board.draw('omdor2.png')
+
+    tree = OrganismTree(board, organisms, 'Omdor', player_keys(organisms, 'Omdor')[0])
+    walk = tree.walk()
+    print(walk)
+
+    eats = [
+        action
+        for action in walk if action[0] == EAT and action[1][0] == EAT and action[2][0] == EAT]
+
+    for eat in eats:
+        print(eat)
+        food_spaces = [
+            action[2] for action in eat[1:]]
+        print(food_spaces)
+        assert not (food_spaces[0] == ('green', 11) and food_spaces[0] == food_spaces[1])
 
 
 def test_organism():
