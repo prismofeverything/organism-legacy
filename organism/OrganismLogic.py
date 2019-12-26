@@ -393,7 +393,13 @@ class OrganismBoard(object):
         """
         n_rings = len(self.rings)
 
-        fig, ax = plt.subplots(figsize=(5, 5))
+        if isinstance(filename, str):
+            direct_plot = True
+            fig, ax = plt.subplots(figsize=(5, 5))
+        else:
+            direct_plot = False
+            ax = filename
+
         ax.set_axis_off()
         ax.set_xlim([-n_rings, n_rings])
         ax.set_ylim([-n_rings, n_rings])
@@ -499,9 +505,10 @@ class OrganismBoard(object):
 
         ax.text(0, -n_rings - 0.5, token_str, horizontalalignment='center')
 
-        # Save figure
-        plt.savefig(filename)
-        plt.close()
+        if direct_plot:
+            # Save figure
+            plt.savefig(filename)
+            plt.close()
 
     def _build_axial_coords(self, space):
         """

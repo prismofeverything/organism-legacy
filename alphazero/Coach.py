@@ -104,9 +104,10 @@ class Coach():
                     iterationTrainExamples += self.executeEpisode()
     
                     # bookkeeping + plot progress
-                    eps_time.update(time.time() - end)
+                    cur_eps_time = time.time() - end
+                    eps_time.update(cur_eps_time)
                     end = time.time()
-                    bar.suffix = '({eps}/{maxeps}) Eps Time: {et:.3f}s | Total: {total:} | ETA: {eta:}'.format(eps=eps+1, maxeps=self.args.numEps, et=eps_time.avg,
+                    bar.suffix = '({eps}/{maxeps}) Avg Eps Time: {et:.3f}s | Total: {total:} | ETA: {eta:}'.format(eps=eps+1, maxeps=self.args.numEps, et=eps_time.avg,
                                                                                                                total=bar.elapsed_td, eta=bar.eta_td)
                     bar.next()
                 bar.finish()

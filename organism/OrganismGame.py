@@ -28,7 +28,7 @@ PASS = 'PASS'
 
 class OrganismGame(Game):
 
-	def __init__(self, n_rings=5, initial_food=[5, 3, 2, 1, 1], n_tokens_to_win=7, n_organisms_to_win=3):
+	def __init__(self, n_rings=5, initial_food=[5, 3, 1, 1, 0], n_tokens_to_win=7, n_organisms_to_win=3):
 		"""
 		Input:
 			rings: List of the names of rings on the board
@@ -59,9 +59,17 @@ class OrganismGame(Game):
 		board.place_element((self.rings[-1], 2), 'CS', MOVE)
 		board.place_element((self.rings[-1], 3), 'CS', GROW)
 
+		board.add_food((self.rings[-1], 1), 1)
+		board.add_food((self.rings[-1], 2), 1)
+		board.add_food((self.rings[-1], 3), 1)
+
 		board.place_element((self.rings[-1], 1 + 3*(self.n_rings - 1)), 'YH', EAT)
 		board.place_element((self.rings[-1], 2 + 3*(self.n_rings - 1)), 'YH', MOVE)
 		board.place_element((self.rings[-1], 3 + 3*(self.n_rings - 1)), 'YH', GROW)
+
+		board.add_food((self.rings[-1], 1 + 3*(self.n_rings - 1)), 1)
+		board.add_food((self.rings[-1], 2 + 3*(self.n_rings - 1)), 1)
+		board.add_food((self.rings[-1], 3 + 3*(self.n_rings - 1)), 1)
 
 		board.set_current_player('CS')
 
@@ -93,7 +101,7 @@ class OrganismGame(Game):
 			nextState: state after applying action
 			nextPlayer: player who plays in the next turn
 		"""
-		board = self._get_board_from_state(state)
+		board = self.get_board_from_state(state)
 
 		if action == PASS:
 			next_board = copy.deepcopy(board)
@@ -121,7 +129,7 @@ class OrganismGame(Game):
 			validMoves: List of tuples (organism_index, move) that can be used
 			by getNextState().
 		"""
-		board = self._get_board_from_state(state)
+		board = self.get_board_from_state(state)
 
 		player_name = PLAYER_NAMES[player]
 
@@ -168,6 +176,7 @@ class OrganismGame(Game):
 				next_states.append(next_state)
 				valid_moves.append(move)
 			except:
+				import ipdb; ipdb.set_trace()
 				continue
 
 		assert len(next_states) == len(valid_moves)
@@ -188,7 +197,7 @@ class OrganismGame(Game):
 		Returns:
 			r: 0 if game has not ended. 1 if player won, -1 if player lost
 		"""
-		board = self._get_board_from_state(state)
+		board = self.get_board_from_state(state)
 
 		winners = board.find_winners()
 
@@ -297,7 +306,7 @@ class OrganismGame(Game):
 		Returns True if the next move by the current player is the first move
 		of the player's turn.
 		"""
-		board = self._get_board_from_state(state)
+		board = self.get_board_from_state(state)
 		organisms = board.find_organisms()
 
 		if board.current_player in organisms:
@@ -308,7 +317,7 @@ class OrganismGame(Game):
 
 		return n_player_organisms == n_movable_organisms
 
-	def _get_board_from_state(self, state):
+	def get_board_from_state(self, state):
 		"""
 		Returns the board representation given a state array.
 		"""
@@ -345,14 +354,14 @@ class OrganismGame(Game):
 def test_game():
 	n_rings = 3
 	initial_food = [3, 2, 1]
-	n_tokens_to_win = 5
-	n_organisms_to_win = -1
+	n_tokens_to_win = 3
+	n_organisms_to_win = 2
 
 	game = OrganismGame(n_rings=n_rings, initial_food=initial_food,
 	    n_tokens_to_win=n_tokens_to_win, n_organisms_to_win=n_organisms_to_win)
 	init_state = game.getInitBoard()
 
-	board = game._get_board_from_state(init_state)
+	board = game.get_board_from_state(init_state)
 	board.draw('test.png')
 	print(init_state)
 	print(game.getGameEnded(init_state, 1))
@@ -365,7 +374,7 @@ def test_game():
 	print(state)
 	print(game.getGameEnded(state, 1))
 
-	board = game._get_board_from_state(state)
+	board = game.get_board_from_state(state)
 
 	valid_moves = game.getValidMoves(state, -1)
 	print(valid_moves)

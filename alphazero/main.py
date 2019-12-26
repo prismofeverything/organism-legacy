@@ -27,7 +27,7 @@ if __name__=="__main__":
     np.random.seed(SEED)
     torch.manual_seed(SEED)
 
-    g = Game(n_rings=3, initial_food=[3, 2, 1], n_tokens_to_win=3, n_organisms_to_win=2)
+    g = Game(n_rings=4, initial_food=[5, 3, 1, 0], n_tokens_to_win=5, n_organisms_to_win=3)
     nnet = nn(g)
 
     if args.load_model:
