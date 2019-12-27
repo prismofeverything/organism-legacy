@@ -3,7 +3,7 @@ import sys
 
 sys.path.append('..')
 from alphazero.Game import Game
-from organism.OrganismLogic import OrganismBoard, OrganismTree, OrganismTurn, player_keys
+from organism.OrganismLogic import OrganismBoard, OrganismTree, OrganismTurn
 import numpy as np
 import copy
 
@@ -22,8 +22,6 @@ EAT = 'EAT'
 MOVE = 'MOVE'
 GROW = 'GROW'
 CIRCULATE = 'CIRCULATE'
-
-PASS = 'PASS'
 
 
 class OrganismGame(Game):
@@ -55,21 +53,21 @@ class OrganismGame(Game):
 		food_dict = {self.rings[i]: self.initial_food[i] for i in range(self.n_rings)}
 		board.initialize_food(food_dict)
 
-		board.place_element((self.rings[-1], 1), 'CS', EAT)
-		board.place_element((self.rings[-1], 2), 'CS', MOVE)
-		board.place_element((self.rings[-1], 3), 'CS', GROW)
+		board.place_element((self.rings[-1], 6*(self.n_rings - 1) - 1), 'CS', EAT)
+		board.place_element((self.rings[-1], 0), 'CS', MOVE)
+		board.place_element((self.rings[-1], 1), 'CS', GROW)
 
+		board.add_food((self.rings[-1], 6*(self.n_rings - 1) - 1), 1)
+		board.add_food((self.rings[-1], 0), 1)
 		board.add_food((self.rings[-1], 1), 1)
-		board.add_food((self.rings[-1], 2), 1)
-		board.add_food((self.rings[-1], 3), 1)
 
-		board.place_element((self.rings[-1], 1 + 3*(self.n_rings - 1)), 'YH', EAT)
-		board.place_element((self.rings[-1], 2 + 3*(self.n_rings - 1)), 'YH', MOVE)
-		board.place_element((self.rings[-1], 3 + 3*(self.n_rings - 1)), 'YH', GROW)
+		board.place_element((self.rings[-1], 3*(self.n_rings - 1) - 1), 'YH', EAT)
+		board.place_element((self.rings[-1], 3*(self.n_rings - 1)), 'YH', MOVE)
+		board.place_element((self.rings[-1], 3*(self.n_rings - 1) + 1), 'YH', GROW)
 
-		board.add_food((self.rings[-1], 1 + 3*(self.n_rings - 1)), 1)
-		board.add_food((self.rings[-1], 2 + 3*(self.n_rings - 1)), 1)
-		board.add_food((self.rings[-1], 3 + 3*(self.n_rings - 1)), 1)
+		board.add_food((self.rings[-1], 3*(self.n_rings - 1) - 1), 1)
+		board.add_food((self.rings[-1], 3*(self.n_rings - 1)), 1)
+		board.add_food((self.rings[-1], 3*(self.n_rings - 1) + 1), 1)
 
 		board.set_current_player('CS')
 
@@ -87,7 +85,7 @@ class OrganismGame(Game):
 		Returns:
 			actionSize: number of all possible actions
 		"""
-		valid_moves, _ = self.getValidMoves(state, player)
+		valid_moves = self.getValidMoves(state, player)
 		return len(valid_moves)
 
 	def getNextState(self, state, player, action):
@@ -102,11 +100,6 @@ class OrganismGame(Game):
 			nextPlayer: player who plays in the next turn
 		"""
 		board = self.get_board_from_state(state)
-
-		if action == PASS:
-			next_board = copy.deepcopy(board)
-			next_board.pass_turn()
-			return next_board.get_array_form('CS'), PLAYER_INDEXES[next_board.current_player]
 
 		organism_index, move = action
 		player_name = PLAYER_NAMES[player]
@@ -130,7 +123,6 @@ class OrganismGame(Game):
 			by getNextState().
 		"""
 		board = self.get_board_from_state(state)
-
 		player_name = PLAYER_NAMES[player]
 
 		assert player_name == board.current_player
@@ -138,7 +130,7 @@ class OrganismGame(Game):
 		organisms = board.find_organisms()
 		player_organisms = organisms[player_name]
 
-		moves = []
+		valid_moves = []
 
 		for index, organism in player_organisms.items():
 			organism_is_movable = False
@@ -149,44 +141,20 @@ class OrganismGame(Game):
 					break
 
 			if organism_is_movable:
+				hashed_moves = set()
+				unique_moves = []
 				tree = OrganismTree(board, organisms, player_name, index)
 				walk = tree.walk()
 
 				for m in walk:
-					moves.append((index, m))
+					# Remove duplicate moves that lead to the same state
+					if m[1] not in hashed_moves:
+						unique_moves.append((index, m))
+						hashed_moves.add(m[1])
 
-		next_states = []
-		valid_moves = []
-		next_states_hashed = set()
+				valid_moves.extend(unique_moves)
 
-		for move in moves:
-			try:
-				next_state = self.getNextState(state, player, move)
-
-				if np.all(state[:7, :, :] == next_state[0][:7, :, :]):
-					continue
-
-				next_state_hashed = next_state[0].tostring()
-
-				if next_state_hashed in next_states_hashed:
-					continue
-				else:
-					next_states_hashed.add(next_state_hashed)
-
-				next_states.append(next_state)
-				valid_moves.append(move)
-			except:
-				import ipdb; ipdb.set_trace()
-				continue
-
-		assert len(next_states) == len(valid_moves)
-
-		# If there are no valid moves, add "pass" as only possible move
-		if len(valid_moves) == 0:
-			valid_moves.append(PASS)
-			next_states.append(self.getNextState(state, player, PASS))
-
-		return valid_moves, next_states
+		return valid_moves
 
 	def getGameEnded(self, state, player):
 		"""
@@ -202,6 +170,10 @@ class OrganismGame(Game):
 		winners = board.find_winners()
 
 		if len(winners) == 0:
+			# Player loses if the action size is zero
+			if self.getActionSize(state, player) == 0:
+				return -1
+
 			return 0
 		elif len(winners) == 1:
 			if winners[0] == PLAYER_NAMES[player]:
@@ -329,6 +301,9 @@ class OrganismGame(Game):
 		return board
 
 	def _flip_board_state(self, state):
+		"""
+		Flips the board state to reverse players one and two.
+		"""
 		flipped_state = np.zeros_like(state)
 
 		# Flip element positions
@@ -366,8 +341,10 @@ def test_game():
 	print(init_state)
 	print(game.getGameEnded(init_state, 1))
 
-	valid_moves, next_states = game.getValidMoves(init_state, 1)
+	valid_moves = game.getValidMoves(init_state, 1)
 	print(len(valid_moves))
+
+	import ipdb; ipdb.set_trace()
 
 	state, player = game.getNextState(init_state, 1, valid_moves[i])
 

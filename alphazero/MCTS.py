@@ -7,11 +7,16 @@ class MCTS():
     This class handles the MCTS tree.
     """
 
-    def __init__(self, game, nnet, args, softmax_temp=0.7):
+    def __init__(self, game, nnet, args, pitting=False):
         self.game = game
         self.nnet = nnet
         self.args = args
-        self.softmax_temp = softmax_temp
+
+        if pitting:
+            self.softmax_temp = self.args.softmaxTempPitting
+        else:
+            self.softmax_temp = self.args.softmaxTempTraining
+
         self.Qsa = {}       # stores Q values for s,a (as defined in the paper)
         self.Nsa = {}       # stores #times edge s,a was visited
         self.Ns = {}        # stores #times board s was visited
@@ -83,11 +88,11 @@ class MCTS():
             v = self.nnet.predict(canonicalBoard)
 
             # Calculate Ps's by the softmax of next v's
-            valid_moves, next_states = self.game.getValidMoves(canonicalBoard, 1)
+            valid_moves = self.game.getValidMoves(canonicalBoard, 1)
             next_vs = np.zeros(len(valid_moves))
 
             for i in range(len(valid_moves)):
-                next_state, next_player = next_states[i]
+                next_state, next_player = self.game.getNextState(canonicalBoard, 1, valid_moves[i])
                 canonical_state = self.game.getCanonicalForm(next_state, next_player)
                 next_vs[i] = (-1)**(next_player == -1)*self.nnet.predict(canonical_state)
 

@@ -7,8 +7,6 @@ import time, os, sys
 from pickle import Pickler, Unpickler
 from random import shuffle
 
-LONG_GAME_THRESHOLD = 60
-
 class Coach():
     """
     This class executes the self-play + learning. It uses the functions defined
@@ -20,8 +18,8 @@ class Coach():
         self.pnet = self.nnet.__class__(self.game)  # the competitor network
         self.args = args
         self.mcts = MCTS(self.game, self.nnet, self.args)
-        self.trainExamplesHistory = []    # history of examples from args.numItersForTrainExamplesHistory latest iterations
-        self.skipFirstSelfPlay = False # can be overriden in loadTrainExamples()
+        self.trainExamplesHistory = []  # history of examples from args.numItersForTrainExamplesHistory latest iterations
+        self.skipFirstSelfPlay = False  # can be overriden in loadTrainExamples()
 
     def executeEpisode(self):
         """
@@ -31,7 +29,7 @@ class Coach():
         ends, the outcome of the game is used to assign values to each example
         in trainExamples.
 
-        It uses a temp=1 if episodeStep < tempThreshold, and thereafter
+        It uses a temp=1 if episodeStep < tempThresholdTraining, and thereafter
         uses temp=0.
 
         Returns:
@@ -45,38 +43,37 @@ class Coach():
         episodeStep = 0
 
         while True:
-            if episodeStep >= LONG_GAME_THRESHOLD:  # Reset long games
-                print("Long game reset")
+            if episodeStep >= self.args.longGameThreshold:
+                # Restart long games to reduce self-play time and remove
+                # confounding training examples
                 self.mcts = MCTS(self.game, self.nnet, self.args)
                 trainExamples = []
                 board = self.game.getInitBoard()
                 self.curPlayer = 1
                 episodeStep = 0
 
-            episodeStep += 1
-
             canonicalBoard = self.game.getCanonicalForm(board, self.curPlayer)
-            temp = int(episodeStep < self.args.tempThreshold)
+            temp = int(episodeStep < self.args.tempThresholdTraining)
 
-            pi = self.mcts.getActionProb(canonicalBoard, episodeStep - 1, temp=temp)
+            pi = self.mcts.getActionProb(canonicalBoard, episodeStep, temp=temp)
             sym = self.game.getSymmetries(canonicalBoard)
             for b in sym:
                 trainExamples.append([b, self.curPlayer, None])
 
             action = np.random.choice(len(pi), p=pi)
-            valid_moves, next_states = self.game.getValidMoves(board, self.curPlayer)
-
-            board, self.curPlayer = next_states[action]
+            valid_moves = self.game.getValidMoves(board, self.curPlayer)
+            board, self.curPlayer = self.game.getNextState(board, self.curPlayer, valid_moves[action])
 
             r = self.game.getGameEnded(board, self.curPlayer)
 
+            episodeStep += 1
+
             if r!=0:
-                print(" Number of moves: %d" % (episodeStep, ))
                 canonicalBoard = self.game.getCanonicalForm(board, self.curPlayer)
                 sym = self.game.getSymmetries(canonicalBoard)
                 for b in sym:
                     trainExamples.append([b, self.curPlayer, None])
-                return [(x[0], r*((-1)**(x[1]!=self.curPlayer))) for x in trainExamples]
+                return [(x[0], r*((-1)**(x[1]!=self.curPlayer))) for x in trainExamples], episodeStep
 
     def learn(self):
         """
@@ -96,19 +93,24 @@ class Coach():
                 iterationTrainExamples = deque([], maxlen=self.args.maxlenOfQueue)
     
                 eps_time = AverageMeter()
+                n_turns = AverageMeter()
                 bar = Bar('Self Play', max=self.args.numEps)
                 end = time.time()
     
                 for eps in range(self.args.numEps):
                     self.mcts = MCTS(self.game, self.nnet, self.args)   # reset search tree
-                    iterationTrainExamples += self.executeEpisode()
+                    episodeTrainExamples, episodeStep = self.executeEpisode()
+                    iterationTrainExamples += episodeTrainExamples
     
                     # bookkeeping + plot progress
                     cur_eps_time = time.time() - end
                     eps_time.update(cur_eps_time)
+                    n_turns.update(episodeStep)
                     end = time.time()
-                    bar.suffix = '({eps}/{maxeps}) Avg Eps Time: {et:.3f}s | Total: {total:} | ETA: {eta:}'.format(eps=eps+1, maxeps=self.args.numEps, et=eps_time.avg,
-                                                                                                               total=bar.elapsed_td, eta=bar.eta_td)
+                    bar.suffix = '({eps}/{maxeps}) Time: {cet}s | Avg Turns: {avg_turn:.1f} | Avg Time: {et}s | Total: {total:} | ETA: {eta:}'.format(
+                        eps=eps+1, maxeps=self.args.numEps, n_turn=episodeStep,
+                        avg_turn=n_turns.avg, et=int(eps_time.avg),
+                        cet=int(cur_eps_time), total=bar.elapsed_td, eta=bar.eta_td)
                     bar.next()
                 bar.finish()
 
