@@ -1,9 +1,8 @@
 import Arena
 from organism.OrganismGame import OrganismGame
-from organism.OrganismPlayers import *
 from organism.pytorch.NNet import NNetWrapper as NNet
 
-from utils import *
+from dotdict import dotdict
 
 """
 use this script to play any two agents against each other, or play manually

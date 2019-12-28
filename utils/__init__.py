@@ -1,8 +1,7 @@
-"""Useful utils
 """
-from .misc import *
-from .logger import *
-from .eval import *
+Useful utils
+"""
+from .misc import AverageMeter
 
 # progress bar
 import os, sys

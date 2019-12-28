@@ -1,7 +1,7 @@
 from Coach import Coach
 from organism.OrganismGame import OrganismGame as Game
 from organism.pytorch.NNet import NNetWrapper as nn
-from utils import *
+from dotdict import dotdict
 import numpy as np
 import torch
 
@@ -15,7 +15,7 @@ args = dotdict({
     'updateThreshold': 0.6,  # Minimum win rate to update best agent
     'maxlenOfQueue': 200000,  # Maximum number of training examples to keep
     'numMCTSSims': 25,  # Number of MCTS sims to run per turn
-    'longGameThreshold': 50,  # Self-play games are reset and pitting games are considered a tie after this many moves
+    'longGameThreshold': 100,  # Self-play games are reset and pitting games are considered a tie after this many moves
     'arenaCompare': 50,  # Number of games played to determine best agent
     'cpuct': 1,
 
