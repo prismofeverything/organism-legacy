@@ -387,18 +387,17 @@ class OrganismBoard(object):
         self.spaces[space]['element'] = None
         self.spaces[space]['food'] += 1
 
-    def draw(self, filename):
+    def draw(self, filename='test.png', ax=None):
         """
         Draw the state of the board using matplotlib, output as file.
         """
         n_rings = len(self.rings)
 
-        if isinstance(filename, str):
-            direct_plot = True
+        if ax is None:
+            ax_given = False
             fig, ax = plt.subplots(figsize=(5, 5))
         else:
-            direct_plot = False
-            ax = filename
+            ax_given = True
 
         ax.set_axis_off()
         ax.set_xlim([-n_rings, n_rings])
@@ -505,7 +504,7 @@ class OrganismBoard(object):
 
         ax.text(0, -n_rings - 0.5, token_str, horizontalalignment='center')
 
-        if direct_plot:
+        if not ax_given:
             # Save figure
             plt.savefig(filename)
             plt.close()
@@ -660,12 +659,6 @@ class OrganismBoard(object):
         # Switch player if current player has moved all organisms
         if len(self.organisms_to_move) == 0:
             self.set_current_player(self._find_opponent(player))
-
-    def pass_turn(self):
-        """
-        Pass the turn without making any moves.
-        """
-        self.set_current_player(self._find_opponent(self.current_player))
 
     def _find_opponent(self, player):
         """
@@ -1136,7 +1129,8 @@ def test_proximity():
     board.place_element(('green', 8), 'Omdor', MOVE)
     board.place_element(('green', 9), 'Omdor', GROW)
 
-    board.draw('small_board.png')
+    board.set_current_player('Balam')
+    board.draw(filename='small_board.png')
 
     organisms = board.find_organisms()
     print(organisms)
@@ -1147,21 +1141,21 @@ def test_proximity():
     turn.apply_actions(board)
     organisms = board.find_organisms()
 
-    board.draw('balam1.png')
+    board.draw(filename='balam1.png')
 
     turn = OrganismTurn(board, organisms, 'Omdor', player_keys(organisms, 'Omdor')[0])
     turn.take_turn([MOVE, [MOVE, ('green', 7), ('orange', 4), ('orange', 3)]])
     turn.apply_actions(board)
     organisms = board.find_organisms()
 
-    board.draw('omdor1.png')
+    board.draw(filename='omdor1.png')
 
     turn = OrganismTurn(board, organisms, 'Balam', player_keys(organisms, 'Balam')[0])
     turn.take_turn([MOVE, [MOVE, ('green', 1), ('orange', 0), ('orange', 5)]])
     turn.apply_actions(board)
     organisms = board.find_organisms()
 
-    board.draw('balam2.png')
+    board.draw(filename='balam2.png')
 
     tree = OrganismTree(board, organisms, 'Balam', player_keys(organisms, 'Balam')[0])
     walk = tree.walk()
@@ -1183,7 +1177,7 @@ def test_proximity():
     turn.apply_actions(board)
     organisms = board.find_organisms()
 
-    board.draw('omdor2.png')
+    board.draw(filename='omdor2.png')
 
     tree = OrganismTree(board, organisms, 'Omdor', player_keys(organisms, 'Omdor')[0])
     walk = tree.walk()
@@ -1237,7 +1231,7 @@ def test_organism():
     print(board.spaces)
 
     board.set_current_player('Aorwa')
-    board.draw('initial_board.png')
+    board.draw(filename='initial_board.png')
 
     organisms = board.find_organisms()
     print(organisms)
@@ -1249,7 +1243,7 @@ def test_organism():
     print(board.spaces[('blue', 1)])
     print(board.spaces[('blue', 2)])
 
-    board.draw('aorwa1.png')
+    board.draw(filename='aorwa1.png')
 
     organisms = board.find_organisms()
     print(organisms)
@@ -1266,7 +1260,7 @@ def test_organism():
     print(board.spaces[('blue', 9)])
     print(board.spaces[('purple', 13)])
 
-    board.draw('maxoz1.png')
+    board.draw(filename='maxoz1.png')
 
     organisms = board.find_organisms()
     print(organisms)
@@ -1279,7 +1273,7 @@ def test_organism():
     print(board.spaces[('blue', 1)])
     print(board.spaces[('blue', 2)])
 
-    board.draw('aorwa2.png')
+    board.draw(filename='aorwa2.png')
 
     organisms = board.find_organisms()
     print(organisms)
@@ -1291,7 +1285,7 @@ def test_organism():
     print(board.spaces[('purple', 13)])
     print(board.spaces[('purple', 14)])
 
-    board.draw('maxoz2.png')
+    board.draw(filename='maxoz2.png')
 
     organisms = board.find_organisms()
     print(organisms)
@@ -1303,7 +1297,7 @@ def test_organism():
     print(board.spaces[('blue', 1)])
     print(board.spaces[('blue', 2)])
 
-    board.draw('aorwa3.png')
+    board.draw(filename='aorwa3.png')
 
     organisms = board.find_organisms()
     print(organisms)

@@ -125,8 +125,6 @@ class OrganismGame(Game):
 		board = self.get_board_from_state(state)
 		player_name = PLAYER_NAMES[player]
 
-		assert player_name == board.current_player
-
 		organisms = board.find_organisms()
 		player_organisms = organisms[player_name]
 
@@ -337,16 +335,14 @@ def test_game():
 	init_state = game.getInitBoard()
 
 	board = game.get_board_from_state(init_state)
-	board.draw('test.png')
+	board.draw(filename='test.png')
 	print(init_state)
 	print(game.getGameEnded(init_state, 1))
 
 	valid_moves = game.getValidMoves(init_state, 1)
 	print(len(valid_moves))
 
-	import ipdb; ipdb.set_trace()
-
-	state, player = game.getNextState(init_state, 1, valid_moves[i])
+	state, player = game.getNextState(init_state, 1, valid_moves[0])
 
 	print(state)
 	print(game.getGameEnded(state, 1))
