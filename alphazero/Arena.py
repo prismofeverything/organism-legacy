@@ -163,7 +163,7 @@ class Arena():
             ax = plt.subplot(gs[int(i/6), i % 6])
 
             board = self.game.get_board_from_state(state)
-            board.draw(ax)
+            board.draw(ax=ax)
 
         plt.tight_layout()
         plt.savefig(os.path.join(SAMPLE_GAMES_DIRECTORY, filename))

@@ -1,7 +1,7 @@
 import time
 
 import numpy as np
-import sys
+import sys, os
 sys.path.append('../../')
 from alphazero.dotdict import dotdict
 from utils import Bar, AverageMeter
