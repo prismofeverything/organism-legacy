@@ -291,28 +291,81 @@ class OrganismBoard(object):
         if the game has not ended yet.
         """
         winners = []
+        all_players = self.find_players()
 
-        # Find player with the only surviving organism
+        # Determine if game has ended
+        game_ended = False
+
+        # One or more players have enough organisms or tokens
         organisms = self.find_organisms()
-        players_with_organisms = list(organisms.keys())
-        if len(players_with_organisms) == 1:
-            winners.append(players_with_organisms[0])
-        # If no organisms exist on the board, current player is the winner
-        # (Opponent committed suicide)
-        elif len(players_with_organisms) == 0:
-            winners.append(self.current_player)
 
-        # Find players with organisms equal to or more than the number to win
         if self.n_organisms_to_win > 0:
-            for player, player_organisms in organisms.items():
-                if len(player_organisms) >= self.n_organisms_to_win:
-                    winners.append(player)
+            n_organisms = {}
+            for player in all_players:
+                n_organisms[player] = len(organisms.get(player, []))
+                if n_organisms[player] >= self.n_organisms_to_win:
+                    game_ended = True
 
-        # Find players with tokens equal to or more than the number to win
         if self.n_tokens_to_win > 0:
             for player, n_tokens in self.tokens.items():
                 if n_tokens >= self.n_tokens_to_win:
-                    winners.append(player)
+                    game_ended = True
+
+        # One or more players eliminated from board
+        players_with_organisms = list(organisms.keys())
+
+        if len(players_with_organisms) < 2:
+            game_ended = True
+
+        # If game ended, determine winner and add to list of winners
+        if game_ended:
+            # Find players with organisms equal to or more than the number
+            # to win
+            if self.n_organisms_to_win > 0:
+                for player, n_player_organisms in n_organisms.items():
+                    if n_player_organisms >= self.n_organisms_to_win:
+                        winners.append(player)
+
+            # Find players with tokens equal to or more than the number to win
+            if len(winners) == 0:
+                if self.n_tokens_to_win > 0:
+                    for player, n_tokens in self.tokens.items():
+                        if n_tokens >= self.n_tokens_to_win:
+                            winners.append(player)
+
+            # Find eliminated players
+            if len(winners) == 0:
+                if len(players_with_organisms) == 1:
+                    winners.append(players_with_organisms[0])
+
+                # If no organisms exist on the board, current player is the
+                # winner (Opponent committed suicide)
+                elif len(players_with_organisms) == 0:
+                    winners.append(self.current_player)
+
+        else:
+            # Check if current player does not have any valid moves
+            player_organisms = organisms[self.current_player]
+            valid_moves = []
+
+            for index, organism in player_organisms.items():
+                organism_is_movable = False
+
+                for movable_organism in self.organisms_to_move:
+                    if set(organism) == set(movable_organism):
+                        organism_is_movable = True
+                        break
+
+                if organism_is_movable:
+                    tree = OrganismTree(self, organisms, self.current_player, index)
+                    walk = tree.walk()
+                    valid_moves.extend(walk)
+
+            # If current player does not have any valid moves the opponent wins
+            if len(valid_moves) == 0:
+                for player in all_players:
+                    if player != self.current_player:
+                        winners.append(player)
 
         return list(set(winners))
 
