@@ -125,6 +125,8 @@ class OrganismGame(Game):
 		board = self.get_board_from_state(state)
 		player_name = PLAYER_NAMES[player]
 
+		assert board.current_player == player_name
+
 		organisms = board.find_organisms()
 		player_organisms = organisms[player_name]
 
@@ -168,10 +170,6 @@ class OrganismGame(Game):
 		winners = board.find_winners()
 
 		if len(winners) == 0:
-			# Player loses if the action size is zero
-			if self.getActionSize(state, player) == 0:
-				return -1
-
 			return 0
 		elif len(winners) == 1:
 			if winners[0] == PLAYER_NAMES[player]:
@@ -346,6 +344,8 @@ def test_game():
 
 	print(state)
 	print(game.getGameEnded(state, 1))
+
+	import ipdb; ipdb.set_trace()
 
 	board = game.get_board_from_state(state)
 
