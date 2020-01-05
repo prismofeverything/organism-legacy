@@ -10,18 +10,18 @@ args = dotdict({
     'numEps': 100,  # Number of self-play games per iteration
     'tempThresholdTraining': 30,  # MCTS temperature set to zero after this many moves during training
     'tempThresholdPitting': 20,  # MCTS temperature set to zero after this many moves during pitting
-    'softmaxTempTraining': 0.7,  # Softmax temperature used in MCTS during training
+    'softmaxTempTraining': 0.35,  # Softmax temperature used in MCTS during training
     'softmaxTempPitting': 0.35,  # Softmax temperature used in MCTS during pitting
     'updateThreshold': 0.6,  # Minimum win rate to update best agent
     'maxlenOfQueue': 200000,  # Maximum number of training examples to keep
-    'numMCTSSims': 25,  # Number of MCTS sims to run per turn
-    'longGameThreshold': 100,  # Self-play games are reset and pitting games are considered a tie after this many moves
+    'numMCTSSims': 50,  # Number of MCTS sims to run per turn
+    'longGameThreshold': 50,  # Self-play games are reset and pitting games are considered a tie after this many moves
     'arenaCompare': 50,  # Number of games played to determine best agent
     'cpuct': 1,
 
-    'checkpoint': './temp/',
-    'load_model': False,
-    'load_folder_file': ('temp', 'best.pth.tar'),
+    'checkpoint': './small_size',
+    'load_model': True,
+    'load_folder_file': ('small_size', 'checkpoint_6.pth.tar'),
     'numItersForTrainExamplesHistory': 20,
 })
 

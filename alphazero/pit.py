@@ -18,11 +18,12 @@ g = OrganismGame(n_rings=n_rings, initial_food=initial_food,
 
 # nnet players
 n1 = NNet(g)
-n1.load_checkpoint('./models', 'small_checkpoint_1.pth.tar')
+n1.load_checkpoint('./small_size', 'best.pth.tar')
 n2 = NNet(g)
-n2.load_checkpoint('./models', 'small_checkpoint_1.pth.tar')
+n2.load_checkpoint('./small_size', 'best.pth.tar')
 
-args = dotdict({'numMCTSSims': 25, 'cpuct': 1.0})
+args = dotdict({'numMCTSSims': 50, 'cpuct': 1.0, 'softmaxTempPitting': 0.35,
+                'longGameThreshold': 50, 'tempThresholdPitting': 20})
 
 arena = Arena.Arena(n1, n2, g, args)
 arena.playGames(10, verbose=True)
