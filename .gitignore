@@ -13,3 +13,7 @@ pom.xml.asc
 /.pytest_cache
 .python-version
 *.png
+/temp
+/sample_games
+.idea
+.DS_store
