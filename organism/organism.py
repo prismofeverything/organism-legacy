@@ -168,13 +168,13 @@ class OrganismBoard(object):
         for space, state in items(self.spaces):
             state['food'] = levels[space[0]]
 
-    def push_food(self, from_space, to_space):
+    def carry_food(self, from_space, to_space):
         food = self.spaces[from_space]['food']
         if self.spaces[to_space]['element'] is None:
             self.spaces[to_space]['food'] += food
         self.spaces[from_space]['food'] = 0
 
-    def move_food(self, from_space, to_space):
+    def circulate_food(self, from_space, to_space):
         self.spaces[from_space]['food'] -= 1
         self.spaces[to_space]['food'] += 1
 
@@ -527,7 +527,7 @@ class OrganismTree(object):
             return self.action_code()
 
     def walk_eat_from(self, space, food_space):
-        self.board.move_food(food_space, space)
+        self.board.circulate_food(food_space, space)
         self.sequence.append(food_space)
 
         return self.walk_order()
@@ -686,7 +686,7 @@ class OrganismTree(object):
             for element_type in [EAT, MOVE, GROW]]
 
     def walk_circulate_to(self, from_space, to_space):
-        self.board.move_food(from_space, to_space)
+        self.board.circulate_food(from_space, to_space)
         self.sequence.append(to_space)
 
         return self.walk_order()
@@ -780,10 +780,10 @@ class EatAction(OrganismAction):
         board.spaces[self.eat_space]['food'] += 1
 
 class MoveAction(OrganismAction):
-    def __init__(self, from_space, to_space, push_food_space):
+    def __init__(self, from_space, to_space, carry_food_space):
         self.from_space = from_space
         self.to_space = to_space
-        self.push_food_space = push_food_space
+        self.carry_food_space = carry_food_space
 
     def apply_action(self, board):
         player = board.space_player(self.from_space)
@@ -796,7 +796,7 @@ class MoveAction(OrganismAction):
         assert len(adjacent_move_elements) > 0
         assert board.spaces[self.to_space]['element'] is None
 
-        board.push_food(self.to_space, self.push_food_space)
+        board.carry_food(self.to_space, self.carry_food_space)
         board.spaces[self.to_space] = board.spaces[self.from_space]
         board.spaces[self.from_space] = {
             'element': None,
