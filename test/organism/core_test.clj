@@ -13,7 +13,7 @@
 (deftest space-adjacencies-test
   (testing "finding the adjacencies for a single space"
     (let [rings (build-rings 5 [:yellow :red :blue :orange :green])
-          adjacent (space-adjacencies rings 3 15 [:orange 11])]
+          adjacent (space-adjacencies rings 3 15 [:orange 10])]
       (println "adjacent" adjacent)
       (is (= 6 (count (last adjacent)))))))
 

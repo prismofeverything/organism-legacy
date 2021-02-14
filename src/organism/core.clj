@@ -46,13 +46,15 @@
         inner-ring (nth rings (dec level))
         inner-color (first inner-ring)
         inner-ratio (* (dec level) cycle)
+        inner-along (dec along)
+        inner-spaces (count (last inner-ring))
         inner (if axis?
                 [[inner-color inner-ratio]]
-                [[inner-color inner-ratio]
+                [[inner-color (mod (+ inner-ratio inner-along) inner-spaces)]
                  [inner-color
                   (mod
-                   (+ inner-ratio along)
-                   (count (last inner-ring)))]])
+                   (+ inner-ratio inner-along 1)
+                   inner-spaces)]])
         adjacent (concat neighbors inner)
         outer? (< level (dec (count rings)))]
     (if outer?
