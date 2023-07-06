@@ -5,7 +5,7 @@ gitpython==2.1.11
 matplotlib==2.1.1
 numpy==1.14.5
 pandas==0.23.1
-scipy==1.1.0
+scipy==1.10.0
 scikit-learn==0.19.1
 scikit-image==0.14.0
 torchfile==0.1.0
